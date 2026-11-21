@@ -219,23 +219,43 @@ export default function AdminPage() {
     }
 
     if (tab === "listings") {
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from("listings")
         .select("id, title, price, status, featured_until, categories, seller_id, created_at")
         .order("created_at", { ascending: false })
         .limit(40);
-      const rows = (data ?? []) as ListingRow[];
+
+      if (error) {
+        const retry = await supabase
+          .from("listings")
+          .select("id, title, price, status, featured_until, category, seller_id, created_at")
+          .order("created_at", { ascending: false })
+          .limit(40);
+        data = retry.data as typeof data;
+      }
+
+      const rows = (data ?? []) as unknown as ListingRow[];
       setListings(rows);
       await loadProfiles(rows.map((row) => row.seller_id));
     }
 
     if (tab === "members") {
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from("profiles")
         .select("id, username, email, sales_count, verified_seller, staff_tag, banned, created_at")
         .order("created_at", { ascending: false })
         .limit(80);
-      setMembers((data ?? []) as MemberRow[]);
+
+      if (error) {
+        const retry = await supabase
+          .from("profiles")
+          .select("id, username, email, sales_count, verified_seller, created_at")
+          .order("created_at", { ascending: false })
+          .limit(80);
+        data = retry.data as typeof data;
+      }
+
+      setMembers((data ?? []) as unknown as MemberRow[]);
     }
 
     if (tab === "sales") {
@@ -412,15 +432,36 @@ export default function AdminPage() {
     if (!supabase) return;
     setBusy(`${userId}-${tag}`);
     setNotice(null);
+
     const { error } = await supabase.rpc("admin_set_tag", {
       p_user: userId,
       p_tag: tag,
       p_remove: remove,
     });
+
+    let errorText: string | null = error?.message ?? null;
+
+    // Fonksiyon yoksa doğrudan tabloya yaz (çift kayıt güvenli)
+    if (errorText && /could not find the function|schema cache|does not exist/i.test(errorText)) {
+      const fallback = remove
+        ? await supabase.from("user_tags").delete().eq("user_id", userId).eq("tag", tag)
+        : await supabase.from("user_tags").upsert(
+            { user_id: userId, tag, granted_by: user?.id ?? null },
+            { onConflict: "user_id,tag", ignoreDuplicates: true },
+          );
+      errorText = fallback.error?.message ?? null;
+      if (!errorText && tag === "verified_seller") {
+        await supabase
+          .from("profiles")
+          .update({ verified_seller: !remove })
+          .eq("id", userId);
+      }
+    }
+
     setBusy(null);
     setNotice(
-      error
-        ? `Hata: ${error.message} — supabase/onarim.sql çalıştırılmış mı?`
+      errorText
+        ? `Hata: ${errorText} — Supabase'de supabase/HEPSI.sql dosyasını çalıştır.`
         : `${remove ? "Kaldırıldı" : "Verildi"}: ${tag}`,
     );
     await loadTab();
@@ -470,9 +511,10 @@ export default function AdminPage() {
     if (error && /could not find the function|schema cache|does not exist/i.test(error.message)) {
       const fallback = remove
         ? await supabase.from("user_tags").delete().eq("user_id", profile.id).eq("tag", tagChoice)
-        : await supabase
-            .from("user_tags")
-            .insert({ user_id: profile.id, tag: tagChoice, granted_by: user?.id ?? null });
+        : await supabase.from("user_tags").upsert(
+            { user_id: profile.id, tag: tagChoice, granted_by: user?.id ?? null },
+            { onConflict: "user_id,tag", ignoreDuplicates: true },
+          );
 
       setBusy(null);
       if (fallback.error) {
