@@ -2,16 +2,41 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { BellIcon, LogoutIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { Logo } from "@/components/logo";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function SiteHeader() {
   const router = useRouter();
   const { user, loading, signOut } = useAuth();
   const [pending, setPending] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+
+  useEffect(() => {
+    if (!supabase || !user) {
+      setUnread(0);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      const { count } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .is("read_at", null);
+      if (!cancelled) setUnread(count ?? 0);
+    };
+    void load();
+    const timer = setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [supabase, user]);
 
   async function handleSignOut() {
     setPending(true);
@@ -31,6 +56,7 @@ export function SiteHeader() {
             { href: "/ilanlar", label: "İlanlar" },
             { href: "/diger", label: "Diğer" },
             { href: "/mesajlar", label: "Mesajlar" },
+            { href: "/siparisler", label: "Siparişler" },
           ].map((item) => (
             <Link
               key={item.href}
@@ -67,10 +93,15 @@ export function SiteHeader() {
 
               <Link
                 href="/bildirimler"
-                className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-white/3 text-muted transition hover:text-text"
+                className="relative grid h-9 w-9 place-items-center rounded-xl border border-line bg-white/3 text-muted transition hover:text-text"
                 aria-label="Bildirimler"
               >
                 <BellIcon width={17} height={17} />
+                {unread > 0 && (
+                  <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.55rem] font-bold text-ink">
+                    {unread > 9 ? "9+" : unread}
+                  </span>
+                )}
               </Link>
 
               <Link

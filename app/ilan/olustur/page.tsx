@@ -37,6 +37,7 @@ export default function CreateListingPage() {
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState(listingCategories[0].slug);
   const [wantsFeatured, setWantsFeatured] = useState(false);
+  const [featuredDays, setFeaturedDays] = useState(3);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState("");
@@ -147,6 +148,15 @@ export default function CreateListingPage() {
 
       if (insertError) {
         throw new Error(insertError.message);
+      }
+
+      if (wantsFeatured && data?.id) {
+        setStep("Öne çıkarma talebi gönderiliyor…");
+        await supabase.from("featured_requests").insert({
+          listing_id: data.id,
+          seller_id: user.id,
+          days: featuredDays,
+        });
       }
 
       setStep("Tamamlandı!");
@@ -380,6 +390,28 @@ export default function CreateListingPage() {
               />
             </span>
           </button>
+
+          {wantsFeatured && (
+            <div className="mt-3">
+              <p className="text-[0.7rem] text-muted-2">Kaç gün öne çıksın?</p>
+              <div className="mt-1.5 flex gap-1.5">
+                {[1, 3, 7].map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => setFeaturedDays(day)}
+                    className={`chip ${featuredDays === day ? "chip-active" : ""}`}
+                  >
+                    {day} gün
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[0.65rem] leading-relaxed text-muted-2">
+                VIP ayda 3, Premium ayda 1 ücretsiz öne çıkarma hakkına sahip. Hak yoksa
+                talebin yetkili onayına düşer.
+              </p>
+            </div>
+          )}
         </section>
 
         {error && (

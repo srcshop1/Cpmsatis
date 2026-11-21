@@ -1,24 +1,30 @@
 # CPM Satış
 
-itemsatis tarzı dijital ürün pazar yeri. Bu sürümde **kimlik doğrulama** (kayıt / giriş) ve
-panel vitrini hazır: Supabase Auth + Postgres, açık oturumlar, kullanıcı adıyla giriş.
+CPM (Car Parking Multiplayer) araç, çizim ve hesap alım-satımı için itemsatis tarzı
+pazar yeri. **Sitede ödeme alınmaz, direkt satın alma yoktur** — anlaşma satıcı ile alıcı
+arasında mesajlaşarak yapılır.
 
-## Özellikler
+## Neler var
 
-- **Kayıt ol:** Kullanıcı Adı · E-Posta · Şifre · Şifre Tekrar (+ "Kayıt Ol")
-  - Şifre en az **6 karakter**, canlı doğrulama ve eşleşme kontrolü
-  - Kullanıcı adı büyük/küçük harf duyarsız benzersiz
-- **Giriş yap:** **Kullanıcı Adı veya E-Posta** + Şifre, tek form
-- **Basit kullanım:** tek arama kutusu, tek dokunuşla kategoriler, hızlı işlem kutuları
-- **Panel:** kişisel karşılama, arama, kategori filtreleri, örnek ilan vitrini
-- **Supabase yapılandırılmadıysa** yerel **demo modu** ile site tamamen çalışır
+- **İlanlar:** arama + filtre (kategori çoklu seçim, min/maks fiyat, yalnızca çevrimiçi
+  satıcı, 10+ başarılı işlem), kare kartlar, orijinal boyutlu detay galerisi.
+- **İlan oluştur:** en fazla 6 görsel, 72 karakter başlık, zengin metin açıklama,
+  zorunlu fiyat (0 – 50.000.000 ₺), "İlanı Öne Çıkar" (VIP/Premium kotası veya yetkili onayı).
+- **Mesajlar:** sohbet listesi, gerçek zamanlıya yakın yazışma, üç nokta menüsü
+  (engelle / sohbeti temizle / bildir — 10 sebep + açıklama).
+- **Satış akışı:** "Satış yaptım" → müşteri seç → alıcı onayı → "Siparişi Onayla" →
+  başarılı işlem +1, 24 saatte yanıt gelmezse otomatik onay. Sonrasında 5 eksenli değerlendirme.
+- **Profil:** fotoğraf, kullanıcı adı ve şifre değiştirme, çerçeveler, değerlendirme ortalamaları.
+- **Diğer:** SSS (15 soru), destek talebi, onaylı satıcı başvurusu, canlı destek (yakında).
+- **Yetkili paneli:** destek talepleri, onaylı satıcı başvuruları, öne çıkarma, bildiriler,
+  tag ver/al, üye istatistikleri; sadece kurucuda moderatör atama ve genel duyuru.
 
 ## Teknolojiler
 
-- Next.js 15 (App Router, Server Actions) + React 19 + TypeScript
+- Next.js 15 (App Router) + React 19 + TypeScript
 - Tailwind CSS v4
 - Supabase (`@supabase/supabase-js`) — istemci tarayıcıda, yetki RLS ile
-- Demo modu: anahtar yoksa hesaplar tarayıcıda (localStorage) tutulur
+- Anahtar yoksa **demo modu**: hesaplar tarayıcıda (localStorage) tutulur
 
 ## Hızlı başlangıç
 
@@ -28,10 +34,8 @@ cp .env.example .env.local   # Supabase anahtarlarını gir (opsiyonel)
 npm run dev                  # http://localhost:3000
 ```
 
-Anahtar girmezsen site **demo modunda** açılır; hesaplar tarayıcıda saklanır.
-
 Supabase kurulumu: **[SUPABASE-KURULUM.md](./SUPABASE-KURULUM.md)**
-Veritabanı betiği: **[supabase/schema.sql](./supabase/schema.sql)**
+Veritabanı betiği: **[supabase/schema-v3.sql](./supabase/schema-v3.sql)**
 
 ## Komutlar
 
@@ -45,10 +49,16 @@ Veritabanı betiği: **[supabase/schema.sql](./supabase/schema.sql)**
 
 ```
 app/
-  page.tsx              # Ana sayfa (hero, kategoriler, ilanlar)
-  kayit/page.tsx        # Kayıt ol
-  giris/page.tsx        # Giriş yap
-  panel/page.tsx        # Oturum sonrası panel
+  page.tsx              # Ana sayfa
+  ilanlar/              # İlan listesi + filtreler
+  ilan/[id]/            # İlan detayı
+  ilan/olustur/         # İlan oluştur
+  mesajlar/             # Sohbet listesi + sohbet
+  siparisler/           # Satış onayları + değerlendirme
+  bildirimler/          # Bildirimler
+  profil/               # Profil ayarları
+  diger/                # SSS, destek, onaylı satıcı
+  yetkili/              # Kurucu / moderatör paneli
 components/
   auth/                 # Formlar, AuthProvider, auth yerleşimi
   site-header.tsx       # Üst menü
@@ -58,16 +68,16 @@ lib/
   supabase/             # Supabase istemcileri
   validation.ts         # Form doğrulama kuralları
   catalog.ts            # Kategoriler + örnek ilanlar
-supabase/schema.sql     # Tablolar, trigger, RLS, RPC
+supabase/schema-v3.sql # Tablolar, trigger, RLS, RPC (tek dosya)
 ```
 
 ## Yol haritası
 
-- [ ] İlan verme ve ilan detay sayfası (DB'ye bağlı)
-- [ ] Sepet / güvenli ödeme akışı (escrow mantığı)
-- [ ] Satıcı paneli, siparişler, mesajlaşma
-- [ ] Admin paneli ve moderasyon
-- [ ] E-posta doğrulama, şifre sıfırlama
+- [x] İlan verme, ilan listesi/detay, filtreler
+- [x] Satış akışı, değerlendirmeler, mesajlaşma
+- [x] Yetkili paneli (kurucu + moderatör)
+- [ ] Canlı destek (gerçek zamanlı operatör)
+- [ ] E-posta değiştirme, şifre sıfırlama, e-posta doğrulama
 
 ## Güvenlik notları
 

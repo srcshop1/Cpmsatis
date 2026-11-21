@@ -2,20 +2,22 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth/auth-provider";
-import { CheckIcon, ChevronLeftIcon, ClockIcon, HeadsetIcon } from "@/components/icons";
+import { CheckIcon, ChevronLeftIcon, HeadsetIcon } from "@/components/icons";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function SupportPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (title.trim().length < 5) {
       setError("Başlık en az 5 karakter olmalı.");
@@ -27,22 +29,20 @@ export default function SupportPage() {
     }
     setError(null);
 
-    try {
-      const key = "cpms_support_tickets";
-      const existing = JSON.parse(localStorage.getItem(key) ?? "[]");
-      const tickets = Array.isArray(existing) ? existing : [];
-      tickets.push({
-        id: crypto.randomUUID(),
-        userId: user?.id ?? null,
-        username: user?.username ?? null,
-        title: title.trim(),
-        description: description.trim(),
-        createdAt: new Date().toISOString(),
-        status: "open",
-      });
-      localStorage.setItem(key, JSON.stringify(tickets));
-    } catch {
-      /* localStorage kapalıysa sessiz geç */
+    if (!supabase || !user) {
+      setError("Supabase bağlantısı yok.");
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("support_tickets").insert({
+      user_id: user.id,
+      title: title.trim(),
+      description: description.trim(),
+    });
+
+    if (insertError) {
+      setError(`Talep gönderilemedi: ${insertError.message}`);
+      return;
     }
 
     setStep(3);
@@ -140,10 +140,8 @@ export default function SupportPage() {
             </button>
           </div>
 
-          <p className="flex items-start gap-1.5 text-[0.65rem] leading-relaxed text-muted-2">
-            <ClockIcon width={12} height={12} className="mt-0.5 shrink-0" />
-            Talepler şu an bu cihazda saklanıyor; yetkili paneli bağlandığında doğrudan
-            yöneticilere düşecek.
+          <p className="text-[0.65rem] leading-relaxed text-muted-2">
+            Talebin yetkili paneline düşer; durumunu bildirimlerinden takip edebilirsin.
           </p>
         </form>
       )}

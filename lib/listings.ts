@@ -9,6 +9,8 @@ export type ListingSeller = {
   avatar_url: string | null;
   sales_count: number | null;
   rating: number | null;
+  review_count: number | null;
+  verified_seller: boolean | null;
   last_seen_at: string | null;
 };
 
@@ -84,7 +86,7 @@ export async function fetchListings(
   if (sellerIds.length > 0) {
     const { data: profileRows } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url, sales_count, rating, last_seen_at")
+      .select("id, username, avatar_url, sales_count, rating, review_count, verified_seller, last_seen_at")
       .in("id", sellerIds);
 
     for (const profile of (profileRows ?? []) as ListingSeller[]) {

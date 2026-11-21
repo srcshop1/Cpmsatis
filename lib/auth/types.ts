@@ -5,6 +5,9 @@ export type AppUser = {
   avatarUrl?: string | null;
   rating?: number | null;
   salesCount?: number | null;
+  reviewCount?: number | null;
+  verifiedSeller?: boolean | null;
+  frame?: string | null;
   createdAt?: string;
 };
 

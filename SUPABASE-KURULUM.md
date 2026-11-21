@@ -1,142 +1,80 @@
-# Supabase Kurulumu (adım adım)
+# Supabase Kurulumu — 4 adım
 
-Bu proje iki modda çalışır:
-
-| Mod | Ne zaman | Veri nerede |
-| --- | --- | --- |
-| **Demo modu** | Supabase anahtarları boşsa | Tarayıcıda (localStorage), sadece deneme için |
-| **Supabase modu** | `.env.local` içinde URL + anon key varsa | Supabase Postgres + Supabase Auth |
-
-Anahtarları girdiğin an site otomatik olarak Supabase'e geçer — kodda değişiklik gerekmez.
+Site anahtarlar yokken **demo modunda** çalışır. Anahtarları girince gerçek veritabanına geçer.
 
 ---
 
-## 1. Supabase projesi aç
+## 1) Tabloları kur (tek sefer)
 
-1. [supabase.com/dashboard](https://supabase.com/dashboard) adresine gir, GitHub ile giriş yap.
-2. **New project** düğmesine bas.
-3. Ayarlar:
-   - **Name:** `cpmsatis`
-   - **Database Password:** güçlü bir şifre (bir yere kaydet)
-   - **Region:** `Frankfurt (eu-central-1)` — Türkiye'ye en yakın bölgelerden biri
-4. **Create new project** → proje hazırlanırken ~2 dakika bekle.
+1. Supabase panelinde sol menüden **SQL Editor** → **New query**.
+2. Bu repodaki **`supabase/schema-v3.sql`** dosyasının **tamamını** kopyala, yapıştır.
+3. **Run** (Ctrl + Enter) → "Success" yazmalı.
 
----
+Bu dosya her şeyi kurar: profiller, ilanlar, sohbetler, satışlar, değerlendirmeler,
+destek talepleri, onaylı satıcı başvuruları, öne çıkarma talepleri, bildiriler,
+taglar, duyurular, resim kovaları (storage) ve tüm yetki (RLS) kuralları.
 
-## 2. Veritabanı tablolarını oluştur
-
-1. Sol menüden **SQL Editor** → **New query**.
-2. Bu repodaki **`supabase/schema.sql`** dosyasının tamamını kopyalayıp yapıştır.
-3. **Run** (veya `Ctrl + Enter`).
-
-Bu betik şunları yapar:
-
-- `profiles` tablosu (kullanıcı adı, e-posta, puan, satış sayısı)
-- Kullanıcı adı büyük/küçük harf duyarsız **benzersiz** (Ali = ali)
-- Kayıt olan her kullanıcı için otomatik profil oluşturan trigger
-- **Kullanıcı adıyla giriş** için `email_for_username()` fonksiyonu
-- Satır düzeyi güvenlik (RLS) politikaları
-
-> Kontrol: **Table Editor → profiles** tablosunu görüyor olmalısın.
+> Dosya baştan sona bir kez çalıştırılır. Tekrar çalıştırmak da güvenlidir.
 
 ---
 
-## 3. E-posta doğrulamasını ayarla
+## 2) Kurucu hesabını aç
 
-Hemen test etmek için en pratik ayar, doğrulamayı kapatmaktır:
+1. **Authentication → Users → Add user → Create new user**.
+2. E-posta: `srcuveys@gmail.com`
+3. Şifre: `srcshop123?`
+4. **Auto Confirm User** işaretli olsun → **Create user**.
 
-1. **Authentication → Sign In / Providers → Email**
-2. **Confirm email** seçeneğini **kapat** (geliştirme için).
-3. **Save**.
+Kurucu tag'i şemada tanımlı olduğu için bu e-posta otomatik **KURUCU** olur.
+(Sonradan açtıysan 1. adımı tekrar çalıştır, yine kurucu olur.)
 
-> Üretime çıkarken bunu tekrar **aç**. Açıkken kayıt sonrası kullanıcı e-postasındaki
-> bağlantıya tıklamalıdır; kod bu durumda kullanıcıya "e-postanı doğrula" mesajı gösterir.
+---
 
-Ayrıca **Authentication → URL Configuration**:
+## 3) E-posta doğrulamasını kapat (test için)
 
-- **Site URL:** `http://localhost:3000` (canlıda kendi alan adın)
+**Authentication → Sign In / Providers → Email** → **Confirm email** kapalı → **Save**.
+
+**Authentication → URL Configuration**:
+- **Site URL:** `http://localhost:3000` (canlıda kendi adresin)
 - **Redirect URLs:** `http://localhost:3000/**`
 
 ---
 
-## 4. API anahtarlarını al
+## 4) Anahtarları yaz
 
-1. **Project Settings (dişli) → API Keys** (yeni panelde *Project Settings → API*).
-2. Şu iki değeri kopyala:
-   - **Project URL** → `https://xxxxx.supabase.co`
-   - **anon / public** key (`eyJ...` veya `sb_publishable_...`)
+**Project Settings → API** sayfasından iki değeri al:
 
-> ⚠️ **service_role** anahtarını asla tarayıcıya / `NEXT_PUBLIC_` değişkenine koyma.
-> Bu proje yalnızca **anon** anahtarını kullanır; yetki kontrolü RLS ile yapılır.
+- **Project URL** → `https://xxxxx.supabase.co`
+- **anon / publishable** key → `sb_publishable_...` veya `eyJ...`
 
----
-
-## 5. Anahtarları projeye yaz
-
-Repo kökünde `.env.local` dosyası oluştur (`.env.example`'ı kopyalayabilirsin):
-
-```bash
-cp .env.example .env.local
-```
-
-İçini doldur:
+Sonra repo kökünde `.env.local` dosyası:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...buraya-anon-key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-> Anahtarlar `NEXT_PUBLIC_` olduğu için tarayıcıya gider. Bu normaldir: anon/publishable
-> anahtarı herkese açık olacak şekilde tasarlanmıştır. Güvenliği RLS sağlar.
+Sunucuyu yeniden başlat: `npm run dev`.
+
+> `service_role` / secret anahtarı **gerekmez**, tarayıcıya da koymayız. Yetkiyi RLS sağlar.
 
 ---
 
-## 6. Yeniden başlat ve test et
+## Kontrol listesi
 
-```bash
-npm run dev
-```
+- `/durum` sayfasını aç → "Bağlantı: tamam" görünmeli.
+- `/kayit` ile yeni hesap aç → **Table Editor → profiles** tablosunda satır görünmeli.
+- Kurucu hesapla gir → **Diğer → Yetkili Panelleri** görünmeli, içinde 8 sekme olmalı.
+- Bir ilan oluştur → `/ilanlar` sayfasında kendi ilanın görünmeli.
+- Başka bir hesapla o ilana mesaj at → `/mesajlar` iki tarafta da görünmeli.
 
-- `http://localhost:3000/kayit` → kayıt ol
-- **Supabase → Authentication → Users** listesinde kullanıcı görünmeli
-- **Table Editor → profiles** tablosunda `username` satırı görünmeli
-- Çıkış yap → `/giris` → **kullanıcı adıyla** giriş yap (e-posta ile de çalışır)
-
-Hâlâ "Demo modu" uyarısı görüyorsan: `.env.local` kaydedildi mi, sunucu yeniden
-başlatıldı mı kontrol et. (Ortam değişkenleri sadece başlangıçta okunur.)
-
----
-
-## 7. Sık karşılaşılan hatalar
+## Sık gelen hatalar
 
 | Belirti | Çözüm |
 | --- | --- |
-| `email_for_username` fonksiyonu bulunamadı | `schema.sql` çalıştırılmamış. SQL Editor'de tekrar çalıştır. |
-| Kayıttan sonra "e-postanı doğrula" mesajı | 3. adımda *Confirm email* kapatılmalı ya da e-postadaki linke tıklanmalı. |
-| `Invalid login credentials` | Şifre yanlış ya da kullanıcı e-postası doğrulanmamış. |
-| Kayıt "already registered" hatası | Bu e-posta zaten kayıtlı; farklı e-posta kullan. |
-| `new row violates row-level security policy` | `schema.sql` tam çalıştırılmamış; RLS politikalarını kontrol et. |
-| Kullanıcı adı "alınmış" görünüyor ama kullanıcı yok | `profiles` tablosunda eski/artık satır olabilir; sil ve tekrar dene. |
-
----
-
-## 8. Üretime çıkarken kontrol listesi
-
-- [ ] *Confirm email* açık + kendi SMTP sunucun (Supabase varsayılan göndericisi sınırlıdır)
-- [ ] `AUTH_SECRET` güçlü ve gizli
-- [ ] `Site URL` ve `Redirect URLs` gerçek alan adına ayarlı
-- [ ] CAPTCHA / rate limit (Authentication → Attack Protection)
-- [ ] Tüm tablolarda RLS açık
-- [ ] `service_role` anahtarı sadece sunucu tarafında, `NEXT_PUBLIC_` olmadan
-
----
-
-## Demo verilerini sıfırlama
-
-Supabase olmadan deneme yaptıysan hesaplar tarayıcının `localStorage` alanındadır.
-Tarayıcı konsolunda şunu çalıştırıp sayfayı yenile:
-
-```js
-localStorage.clear()
-```
+| "E-posta veya şifre yanlış" | Hesap gerçekten var mı? **Authentication → Users** listesine bak. Yoksa 2. adımı yap. |
+| "Bu kullanıcı adında biri yok" | 1. adım çalıştırılmamış olabilir; `profiles` ve `email_for_username` gerekli. |
+| Görsel yüklenmiyor | 1. adım storage kovalarını (`avatars`, `listing-images`) oluşturur; SQL'i tekrar çalıştır. |
+| "new row violates row-level security" | SQL dosyası yarım çalışmış; tamamını baştan çalıştır. |
+| Demo modu uyarısı | `.env.local` kaydedilmemiş ya da sunucu yeniden başlatılmamış. |

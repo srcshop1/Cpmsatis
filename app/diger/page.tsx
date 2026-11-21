@@ -1,16 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
   ArrowRightIcon,
+  CheckIcon,
   ChevronRightIcon,
   HeadsetIcon,
   MessageIcon,
   ShieldIcon,
   UsersIcon,
 } from "@/components/icons";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { myStaffRole } from "@/lib/social";
 
 const menuItems = [
   {
@@ -45,7 +49,24 @@ const menuItems = [
 
 export default function MorePage() {
   const { user } = useAuth();
-  const isStaff = false; // roller tablosu bağlandığında aktif olacak
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!supabase || !user) {
+      setRole(null);
+      return;
+    }
+    let cancelled = false;
+    void myStaffRole(supabase).then((value) => {
+      if (!cancelled) setRole(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, user]);
+
+  const isStaff = Boolean(role);
 
   return (
     <AppShell>
@@ -90,12 +111,35 @@ export default function MorePage() {
               <ShieldIcon width={19} height={19} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold">Yetkili Panelleri</span>
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                Yetkili Panelleri
+                <span className="badge border border-accent/40 bg-accent/12 text-[0.55rem] text-accent">
+                  {role === "owner" ? "KURUCU" : "MODERATÖR"}
+                </span>
+              </span>
               <span className="mt-0.5 block text-[0.72rem] text-muted-2">
                 Destek, başvuru, öne çıkarma ve tag işlemleri
               </span>
             </span>
             <ArrowRightIcon width={16} height={16} className="text-accent" />
+          </Link>
+        )}
+
+        {user && (
+          <Link
+            href="/siparisler"
+            className="card card-hover flex items-center gap-3 p-3.5"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-black/25 text-accent">
+              <CheckIcon width={19} height={19} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">Siparişler</span>
+              <span className="mt-0.5 block text-[0.72rem] text-muted-2">
+                Satış onayları ve değerlendirmeler
+              </span>
+            </span>
+            <ChevronRightIcon width={16} height={16} className="shrink-0 text-muted-2" />
           </Link>
         )}
       </div>

@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth/auth-provider";
 import { CheckIcon, ChevronLeftIcon } from "@/components/icons";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function VerifiedSellerApplyPage() {
   const { user } = useAuth();
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [accepted, setAccepted] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,27 +19,19 @@ export default function VerifiedSellerApplyPage() {
   const rating = user?.rating ?? 0;
   const allMet = deals >= 30 && reviews >= 30 && reviews > 0 && rating >= 4;
 
-  function submit() {
-    if (!accepted || !allMet) return;
-    try {
-      const key = "cpms_seller_applications";
-      const existing = JSON.parse(localStorage.getItem(key) ?? "[]");
-      const list = Array.isArray(existing) ? existing : [];
-      list.push({
-        id: crypto.randomUUID(),
-        userId: user?.id ?? null,
-        username: user?.username ?? null,
-        deals,
-        reviews,
-        rating,
-        createdAt: new Date().toISOString(),
-        status: "pending",
-      });
-      localStorage.setItem(key, JSON.stringify(list));
-      setSubmitted(true);
-    } catch {
-      setError("Başvuru kaydedilemedi, tekrar dene.");
+  async function submit() {
+    if (!accepted || !allMet || !supabase || !user) return;
+
+    setError(null);
+    const { error: insertError } = await supabase.from("seller_applications").insert({
+      user_id: user.id,
+    });
+
+    if (insertError) {
+      setError(`Başvuru gönderilemedi: ${insertError.message}`);
+      return;
     }
+    setSubmitted(true);
   }
 
   return (

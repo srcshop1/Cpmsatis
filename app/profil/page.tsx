@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
@@ -10,26 +11,35 @@ import {
   LogoutIcon,
   LockIcon,
   MailIcon,
+  ShieldIcon,
+  StarIcon,
   UserIcon,
 } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { MAX_USERNAME_LENGTH, validateUsername } from "@/lib/validation";
-import { useRouter } from "next/navigation";
+import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
+import { myStaffRole } from "@/lib/social";
 
 const frames = [
-  { name: "Kurucu", tone: "from-[#ff9a3c] to-[#f26a00]", locked: true },
-  { name: "Moderatör", tone: "from-[#6c8cff] to-[#3b4fd8]", locked: true },
-  { name: "VIP", tone: "from-[#ffd166] to-[#ff8a1f]", locked: true },
-  { name: "Premium", tone: "from-[#c084fc] to-[#7c3aed]", locked: true },
-  { name: "Onaylı Satıcı", tone: "from-[#35d49a] to-[#0f9d6e]", locked: true },
-  { name: "Üye", tone: "from-[#3a4356] to-[#1b2130]", locked: false },
+  { slug: "owner", name: "Kurucu", tone: "from-[#ff9a3c] to-[#f26a00]", needs: "owner" },
+  { slug: "moderator", name: "Moderatör", tone: "from-[#6c8cff] to-[#3b4fd8]", needs: "moderator" },
+  { slug: "vip", name: "VIP", tone: "from-[#ffd166] to-[#ff8a1f]", needs: "vip" },
+  { slug: "premium", name: "Premium", tone: "from-[#c084fc] to-[#7c3aed]", needs: "premium" },
+  {
+    slug: "verified_seller",
+    name: "Onaylı Satıcı",
+    tone: "from-[#35d49a] to-[#0f9d6e]",
+    needs: "verified_seller",
+  },
+  { slug: "member", name: "Üye", tone: "from-[#3a4356] to-[#1b2130]", needs: "member" },
 ];
 
 export default function ProfilePage() {
   const router = useRouter();
   const { user, refreshUser, signOut } = useAuth();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const [username, setUsername] = useState(user?.username ?? "");
   const [usernameState, setUsernameState] = useState<"idle" | "saving" | "ok">("idle");
@@ -40,9 +50,95 @@ export default function ProfilePage() {
   const [passwordState, setPasswordState] = useState<"idle" | "saving" | "ok">("idle");
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
+  const [tags, setTags] = useState<string[]>([]);
+  const [role, setRole] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [averages, setAverages] = useState<ReviewAverages | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [frameBusy, setFrameBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
   useEffect(() => {
     if (user?.username) setUsername(user.username);
   }, [user?.username]);
+
+  useEffect(() => {
+    if (!supabase || !user) return;
+    let cancelled = false;
+
+    const load = async () => {
+      const { data: tagRows } = await supabase
+        .from("user_tags")
+        .select("tag")
+        .eq("user_id", user.id);
+      if (!cancelled) setTags(((tagRows ?? []) as { tag: string }[]).map((row) => row.tag));
+
+      const staffRole = await myStaffRole(supabase);
+      if (!cancelled) setRole(staffRole);
+
+      const rows = await loadReviews(supabase, { sellerId: user.id }, 50);
+      if (!cancelled) {
+        setReviews(rows);
+        setAverages(averageReviews(rows));
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, user]);
+
+  async function uploadAvatar(file: File | undefined) {
+    if (!file || !supabase || !user) return;
+    if (file.size > 4 * 1024 * 1024) {
+      setNotice("Profil fotoğrafı en fazla 4 MB olabilir.");
+      return;
+    }
+    setAvatarBusy(true);
+    setNotice(null);
+
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+    const path = `${user.id}/avatar-${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(path, file, { upsert: true, cacheControl: "3600" });
+
+    if (uploadError) {
+      setAvatarBusy(false);
+      setNotice(`Fotoğraf yüklenemedi: ${uploadError.message}`);
+      return;
+    }
+
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ avatar_url: data.publicUrl })
+      .eq("id", user.id);
+
+    setAvatarBusy(false);
+    if (updateError) {
+      setNotice("Fotoğraf kaydedilemedi.");
+      return;
+    }
+    await refreshUser();
+    setNotice("Profil fotoğrafın güncellendi.");
+  }
+
+  async function equipFrame(slug: string) {
+    if (!supabase || !user) return;
+    setFrameBusy(slug);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ equipped_frame: slug })
+      .eq("id", user.id);
+    setFrameBusy(null);
+    if (error) {
+      setNotice("Çerçeve seçilemedi.");
+      return;
+    }
+    await refreshUser();
+  }
 
   async function saveUsername() {
     setUsernameError(null);
@@ -51,10 +147,7 @@ export default function ProfilePage() {
       setUsernameError(validation);
       return;
     }
-    if (!supabase || !user) {
-      setUsernameError("Supabase bağlantısı yok.");
-      return;
-    }
+    if (!supabase || !user) return;
 
     setUsernameState("saving");
     const clean = username.trim();
@@ -72,11 +165,7 @@ export default function ProfilePage() {
       return;
     }
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ username: clean })
-      .eq("id", user.id);
-
+    const { error } = await supabase.from("profiles").update({ username: clean }).eq("id", user.id);
     if (error) {
       setUsernameState("idle");
       setUsernameError("Kullanıcı adı güncellenemedi.");
@@ -99,10 +188,7 @@ export default function ProfilePage() {
       setPasswordError("Şifreler birbiriyle uyuşmuyor.");
       return;
     }
-    if (!supabase) {
-      setPasswordError("Supabase bağlantısı yok.");
-      return;
-    }
+    if (!supabase) return;
 
     setPasswordState("saving");
     const { error } = await supabase.auth.updateUser({ password });
@@ -124,48 +210,145 @@ export default function ProfilePage() {
 
   if (!user) return null;
 
+  const owned = new Set<string>(["member", ...tags]);
+  if (role) owned.add(role);
+  const activeFrame = frames.find((frame) => frame.slug === (user.frame ?? "member")) ?? frames[5];
+
   return (
     <AppShell>
       <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">Profil</h1>
       <p className="mt-1 text-xs text-muted-2 sm:text-sm">Hesap bilgilerin ve görünümün</p>
 
+      {notice && (
+        <div className="mt-3 rounded-xl border border-line bg-white/4 px-3.5 py-2.5 text-xs text-muted">
+          {notice}
+        </div>
+      )}
+
       {/* Kimlik kartı */}
-      <div className="mt-5 card relative overflow-hidden p-5">
+      <div className="mt-4 card relative overflow-hidden p-5">
         <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-accent/10 blur-3xl" />
         <div className="relative flex items-center gap-4">
           <div className="relative">
-            <span className="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-accent-soft to-accent-deep text-2xl font-extrabold text-ink">
-              {user.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                user.username.charAt(0).toUpperCase()
-              )}
+            <span
+              className={`grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br ${activeFrame.tone} p-[2px]`}
+            >
+              <span className="grid h-full w-full place-items-center overflow-hidden rounded-[14px] bg-ink text-2xl font-extrabold text-text">
+                {user.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  user.username.charAt(0).toUpperCase()
+                )}
+              </span>
             </span>
             <button
               type="button"
-              disabled
-              className="absolute -bottom-1 -right-1 grid h-7 w-7 cursor-not-allowed place-items-center rounded-full border border-line bg-surface text-muted-2"
-              title="Profil fotoğrafı yakında"
-              aria-label="Profil fotoğrafı değiştir (yakında)"
+              onClick={() => fileRef.current?.click()}
+              disabled={avatarBusy}
+              className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full border border-line bg-surface text-accent transition hover:border-accent"
+              title="Profil fotoğrafını değiştir"
+              aria-label="Profil fotoğrafını değiştir"
             >
-              <ImagePlusIcon width={13} height={13} />
+              {avatarBusy ? <Spinner /> : <ImagePlusIcon width={13} height={13} />}
             </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => {
+                void uploadAvatar(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
           </div>
+
           <div className="min-w-0">
-            <p className="truncate text-lg font-bold">{user.username}</p>
+            <p className="flex items-center gap-1.5 truncate text-lg font-bold">
+              {user.username}
+              {user.verifiedSeller && (
+                <span className="text-mint" title="Onaylı Satıcı">
+                  <ShieldIcon width={16} height={16} />
+                </span>
+              )}
+            </p>
             <p className="mt-0.5 truncate text-xs text-muted-2">{user.email}</p>
             <div className="mt-2 flex flex-wrap gap-1.5 text-[0.65rem]">
               <span className="badge border border-line bg-white/4 text-muted">
                 {user.salesCount ?? 0} başarılı işlem
               </span>
               <span className="badge border border-line bg-white/4 text-muted">
-                {user.rating ? `${Number(user.rating).toFixed(1)} ★` : "puan yok"}
+                {user.rating && (user.reviewCount ?? 0) > 0
+                  ? `${Number(user.rating).toFixed(1)} ★ (${user.reviewCount})`
+                  : "puan yok"}
               </span>
+              {tags.includes("vip") && (
+                <span className="badge border border-accent/40 bg-accent/12 text-accent">VIP</span>
+              )}
+              {tags.includes("premium") && (
+                <span className="badge border border-[#c084fc]/40 bg-[#c084fc]/12 text-[#d8b4fe]">
+                  Premium
+                </span>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Değerlendirmeler */}
+      <section className="mt-4 card p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-bold">
+            <StarIcon width={16} height={16} className="text-accent" /> Değerlendirmelerim
+          </h2>
+          <span className="text-[0.68rem] text-muted-2">
+            {averages?.count ?? 0} değerlendirme
+          </span>
+        </div>
+
+        {averages && averages.count > 0 ? (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {[
+              ["Memnuniyet", averages.satisfaction],
+              ["Güvenilirlik", averages.trust],
+              ["İletişim", averages.communication],
+              ["Teslimat", averages.delivery],
+              ["Genel", averages.overall],
+            ].map(([label, value]) => (
+              <div key={label as string} className="rounded-lg border border-line-soft bg-white/3 px-2.5 py-2">
+                <p className="text-[0.62rem] text-muted-2">{label}</p>
+                <p className="mt-0.5 text-sm font-bold text-accent">
+                  {(value as number).toFixed(1)}
+                  <span className="text-[0.6rem] font-normal text-muted-2"> /5</span>
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-muted-2">
+            Henüz değerlendirme yok. Satışların onaylandıkça alıcılar puan verir.
+          </p>
+        )}
+
+        <div className="mt-3 space-y-2">
+          {reviews.slice(0, 5).map((review) => (
+            <div key={review.id} className="rounded-xl border border-line-soft bg-white/3 p-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[0.75rem] font-semibold">
+                  @{review.reviewer?.username ?? "alıcı"}
+                </span>
+                <span className="ml-auto inline-flex items-center gap-0.5 text-[0.7rem] text-accent">
+                  <StarIcon width={11} height={11} /> {review.overall}/5
+                </span>
+              </div>
+              {review.comment && (
+                <p className="mt-1.5 text-[0.78rem] leading-relaxed text-muted">{review.comment}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Kullanıcı adı */}
       <section className="mt-4 card p-5">
@@ -186,7 +369,13 @@ export default function ProfilePage() {
             disabled={usernameState === "saving" || username === user.username}
             className="btn btn-primary h-11 shrink-0 px-4 text-sm disabled:opacity-50"
           >
-            {usernameState === "saving" ? <Spinner /> : usernameState === "ok" ? <CheckIcon width={16} height={16} /> : "Kaydet"}
+            {usernameState === "saving" ? (
+              <Spinner />
+            ) : usernameState === "ok" ? (
+              <CheckIcon width={16} height={16} />
+            ) : (
+              "Kaydet"
+            )}
           </button>
         </div>
         {usernameError && <p className="mt-2 text-xs text-danger">{usernameError}</p>}
@@ -251,30 +440,43 @@ export default function ProfilePage() {
       <section className="mt-4 card p-5">
         <h2 className="text-sm font-bold">Çerçeveler</h2>
         <p className="mt-1 text-[0.7rem] text-muted-2">
-          Kurucu, moderatör, VIP, Premium ve Onaylı Satıcı çerçeveleri yetkili tarafından verilir.
+          Sahip olduğun çerçeveyi seç. Kurucu/mod çerçeveleri yetkili tarafından verilir.
         </p>
         <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {frames.map((frame) => (
-            <div
-              key={frame.name}
-              className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 ${
-                frame.locked ? "border-line-soft bg-white/3" : "border-accent/40 bg-accent/10"
-              }`}
-            >
-              <span
-                className={`grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br ${frame.tone} text-sm font-extrabold text-ink ${
-                  frame.locked ? "opacity-45" : ""
+          {frames.map((frame) => {
+            const unlocked = owned.has(frame.needs) || frame.needs === "member";
+            const isActive = (user.frame ?? "member") === frame.slug;
+            return (
+              <button
+                key={frame.slug}
+                type="button"
+                disabled={!unlocked || frameBusy === frame.slug}
+                onClick={() => equipFrame(frame.slug)}
+                className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
+                  isActive
+                    ? "border-accent/60 bg-accent/10"
+                    : unlocked
+                      ? "border-line-soft bg-white/3 hover:border-line"
+                      : "border-line-soft bg-white/2 opacity-45"
                 }`}
+                title={unlocked ? `${frame.name} çerçevesini seç` : "Bu çerçeveye sahip değilsin"}
               >
-                {frame.name.charAt(0)}
-              </span>
-              <span className="text-center text-[0.6rem] leading-tight text-muted">
-                {frame.name}
-              </span>
-            </div>
-          ))}
+                <span
+                  className={`grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br ${frame.tone} p-[2px]`}
+                >
+                  <span className="grid h-full w-full place-items-center rounded-full bg-ink text-[0.7rem] font-bold text-text">
+                    {frame.name.charAt(0)}
+                  </span>
+                </span>
+                <span className="text-center text-[0.6rem] leading-tight text-muted">
+                  {frame.name}
+                </span>
+                {isActive && <span className="text-[0.55rem] font-semibold text-accent">aktif</span>}
+                {!unlocked && <span className="text-[0.55rem] text-muted-2">kilitli</span>}
+              </button>
+            );
+          })}
         </div>
-        <p className="mt-2 text-[0.65rem] text-muted-2">Çerçeve seçimi yakında aktif olacak.</p>
       </section>
 
       <button

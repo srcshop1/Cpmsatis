@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { useAuth } from "@/components/auth/auth-provider";
 import {
   CheckIcon,
   ChevronLeftIcon,
@@ -17,6 +18,13 @@ import {
 import { formatPrice } from "@/lib/catalog";
 import { LISTINGS_TABLE, categoryLabel, type ListingSeller } from "@/lib/listings";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
+import {
+  findOrCreateConversation,
+  loadConversations,
+  loadProfileMini,
+  sendMessage,
+} from "@/lib/social";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Detail = {
@@ -31,16 +39,38 @@ type Detail = {
   seller_id: string;
 };
 
+const REVIEW_ROWS = [
+  { key: "satisfaction", label: "Memnuniyet" },
+  { key: "trust", label: "Güvenilirlik" },
+  { key: "communication", label: "İletişim" },
+  { key: "delivery", label: "Teslimat" },
+  { key: "overall", label: "Genel" },
+] as const;
+
 export function ListingDetailClient() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const { user } = useAuth();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
   const [listing, setListing] = useState<Detail | null>(null);
   const [seller, setSeller] = useState<ListingSeller | null>(null);
+  const [sellerAverages, setSellerAverages] = useState<ReviewAverages | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [tab, setTab] = useState<"listing" | "all">("all");
   const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
+
   const [contactOpen, setContactOpen] = useState(false);
+  const [contactText, setContactText] = useState("Merhaba, bu ilan hâlâ satılık mı?");
+  const [sending, setSending] = useState(false);
+
+  const [sellOpen, setSellOpen] = useState(false);
+  const [buyers, setBuyers] = useState<{ id: string; username: string }[]>([]);
+  const [sellDone, setSellDone] = useState(false);
+
+  const isOwner = Boolean(user && listing && user.id === listing.seller_id);
 
   useEffect(() => {
     if (!supabase || !params?.id) {
@@ -70,16 +100,17 @@ export function ListingDetailClient() {
         return;
       }
 
-      setListing(data as Detail);
+      const detail = data as Detail;
+      setListing(detail);
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, username, avatar_url, sales_count, rating, last_seen_at")
-        .eq("id", (data as Detail).seller_id)
-        .maybeSingle();
-
+      const profiles = await loadProfileMini(supabase, [detail.seller_id]);
       if (cancelled) return;
-      setSeller((profile as ListingSeller) ?? null);
+      setSeller(profiles.get(detail.seller_id) ?? null);
+
+      const sellerReviews = await loadReviews(supabase, { sellerId: detail.seller_id });
+      if (cancelled) return;
+      setSellerAverages(averageReviews(sellerReviews));
+      setReviews(sellerReviews);
       setState("ready");
     };
 
@@ -88,6 +119,87 @@ export function ListingDetailClient() {
       cancelled = true;
     };
   }, [supabase, params?.id]);
+
+  useEffect(() => {
+    if (tab !== "listing" || !supabase || !listing) return;
+    void loadReviews(supabase, { listingId: listing.id }).then(setReviews);
+  }, [tab, supabase, listing]);
+
+  async function openContact() {
+    if (!user || !listing) {
+      router.push(`/giris?next=${encodeURIComponent(`/ilan/${params?.id ?? ""}`)}`);
+      return;
+    }
+    if (isOwner) {
+      setSellOpen(true);
+      setSellDone(false);
+      if (supabase) {
+        const rows = await loadConversations(supabase, user.id);
+        const relevant = rows.filter((row) => row.listing_id === listing.id);
+        setBuyers(
+          relevant
+            .map((row) => row.other)
+            .filter((profile): profile is NonNullable<typeof profile> & { id: string } => Boolean(profile))
+            .map((profile) => ({ id: profile.id, username: profile.username })),
+        );
+      }
+      return;
+    }
+    setContactOpen(true);
+  }
+
+  async function sendContactMessage() {
+    if (!supabase || !user || !listing || !seller) return;
+    setSending(true);
+    setError(null);
+
+    const { conversationId, error: conversationError } = await findOrCreateConversation(
+      supabase,
+      { listingId: listing.id, meId: user.id, otherId: seller.id },
+    );
+
+    if (!conversationId) {
+      setError(conversationError ?? "Sohbet açılamadı.");
+      setSending(false);
+      return;
+    }
+
+    const prefix = "Şu ilanla ilgileniyorum;";
+    const body = `${prefix}\n${listing.title} — ${formatPrice(listing.price)}\n\n${contactText.trim()}`;
+    const result = await sendMessage(supabase, {
+      conversationId,
+      senderId: user.id,
+      body,
+      listingRef: {
+        id: listing.id,
+        title: listing.title,
+        price: listing.price,
+        image: listing.images?.[0],
+      },
+    });
+
+    setSending(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    router.push(`/mesajlar/${conversationId}`);
+  }
+
+  async function markSold(buyerId: string) {
+    if (!supabase || !listing) return;
+    setSending(true);
+    const { error: rpcError } = await supabase.rpc("mark_sold", {
+      p_listing: listing.id,
+      p_buyer: buyerId,
+    });
+    setSending(false);
+    if (rpcError) {
+      setError(rpcError.message);
+      return;
+    }
+    setSellDone(true);
+  }
 
   return (
     <AppShell>
@@ -125,7 +237,6 @@ export function ListingDetailClient() {
 
       {state === "ready" && listing && (
         <div className="mt-4 space-y-4">
-          {/* Galeri */}
           <div className="relative overflow-hidden rounded-2xl border border-line bg-black/40">
             <div className="relative">
               {listing.images && listing.images.length > 0 ? (
@@ -152,9 +263,7 @@ export function ListingDetailClient() {
                   <button
                     type="button"
                     onClick={() =>
-                      setIndex((prev) =>
-                        prev === 0 ? listing.images!.length - 1 : prev - 1,
-                      )
+                      setIndex((prev) => (prev === 0 ? listing.images!.length - 1 : prev - 1))
                     }
                     className="absolute left-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-black/80"
                     aria-label="Önceki görsel"
@@ -164,9 +273,7 @@ export function ListingDetailClient() {
                   <button
                     type="button"
                     onClick={() =>
-                      setIndex((prev) =>
-                        prev === listing.images!.length - 1 ? 0 : prev + 1,
-                      )
+                      setIndex((prev) => (prev === listing.images!.length - 1 ? 0 : prev + 1))
                     }
                     className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-black/60 text-white backdrop-blur transition hover:bg-black/80"
                     aria-label="Sonraki görsel"
@@ -200,7 +307,6 @@ export function ListingDetailClient() {
             )}
           </div>
 
-          {/* Bilgi */}
           <div className="card p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -226,7 +332,6 @@ export function ListingDetailClient() {
             </p>
           </div>
 
-          {/* Satıcı */}
           <div className="card p-4">
             <div className="flex items-center gap-3">
               <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-accent-soft to-accent-deep text-lg font-extrabold text-ink">
@@ -238,7 +343,18 @@ export function ListingDetailClient() {
                 )}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold">@{seller?.username ?? "satıcı"}</p>
+                <p className="flex items-center gap-1.5 truncate text-sm font-bold">
+                  @{seller?.username ?? "satıcı"}
+                  {seller?.verified_seller && (
+                    <span
+                      className="text-mint"
+                      title="Onaylı Satıcı"
+                      aria-label="Onaylı Satıcı"
+                    >
+                      <ShieldIcon width={14} height={14} />
+                    </span>
+                  )}
+                </p>
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.68rem] text-muted-2">
                   <span className="inline-flex items-center gap-1 text-mint">
                     <CheckIcon width={12} height={12} />
@@ -246,31 +362,43 @@ export function ListingDetailClient() {
                   </span>
                   <span className="inline-flex items-center gap-1">
                     <StarIcon width={11} height={11} className="text-accent" />
-                    {seller?.rating ? Number(seller.rating).toFixed(1) : "—"}
+                    {sellerAverages && sellerAverages.count > 0
+                      ? `${sellerAverages.overall.toFixed(1)} (${sellerAverages.count})`
+                      : "puan yok"}
                   </span>
                 </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setContactOpen(true)}
-              className="btn btn-primary mt-3 h-11 w-full"
-            >
-              <MessageIcon width={17} height={17} /> Satıcı ile İletişime Geç
-            </button>
+            {isOwner ? (
+              <button
+                type="button"
+                onClick={openContact}
+                className="btn btn-primary mt-3 h-11 w-full"
+              >
+                Satış Yaptım — Müşteriyi Seç
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={openContact}
+                className="btn btn-primary mt-3 h-11 w-full"
+              >
+                <MessageIcon width={17} height={17} /> Satıcı ile İletişime Geç
+              </button>
+            )}
+
             <p className="mt-2 flex items-start gap-1.5 text-[0.65rem] leading-relaxed text-muted-2">
               <ShieldIcon width={12} height={12} className="mt-0.5 shrink-0" />
               Sitede ödeme alınmaz. Anlaşmayı mesajlaşarak kendin yaparsın.
             </p>
           </div>
 
-          {/* Açıklama */}
           <div className="card p-4">
             <h2 className="text-sm font-bold">Açıklama</h2>
             {listing.description_html ? (
               <div
-                className="prose-cpms mt-2 text-[0.85rem] leading-relaxed text-muted [&_b]:text-text [&_strong]:text-text"
+                className="mt-2 text-[0.85rem] leading-relaxed text-muted [&_b]:text-text [&_strong]:text-text"
                 dangerouslySetInnerHTML={{ __html: sanitizeHtml(listing.description_html) }}
               />
             ) : (
@@ -282,34 +410,113 @@ export function ListingDetailClient() {
           <div className="card p-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold">Değerlendirmeler</h2>
-              <span className="text-[0.68rem] text-muted-2">0 değerlendirme</span>
+              <span className="text-[0.68rem] text-muted-2">
+                {sellerAverages?.count ?? 0} değerlendirme
+              </span>
             </div>
+
+            {sellerAverages && sellerAverages.count > 0 && (
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {REVIEW_ROWS.map((row) => (
+                  <div
+                    key={row.key}
+                    className="rounded-lg border border-line-soft bg-white/3 px-2.5 py-2"
+                  >
+                    <p className="text-[0.62rem] text-muted-2">{row.label}</p>
+                    <p className="mt-0.5 text-sm font-bold text-accent">
+                      {sellerAverages[row.key].toFixed(1)}
+                      <span className="text-[0.6rem] font-normal text-muted-2"> /5</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="mt-3 flex gap-1.5">
-              <span className="chip chip-active px-2.5 py-1 text-[0.7rem]">Bu ilan</span>
-              <span className="chip px-2.5 py-1 text-[0.7rem]">Tümü</span>
+              <button
+                type="button"
+                onClick={() => setTab("all")}
+                className={`chip px-2.5 py-1 text-[0.7rem] ${tab === "all" ? "chip-active" : ""}`}
+              >
+                Tümü
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("listing")}
+                className={`chip px-2.5 py-1 text-[0.7rem] ${
+                  tab === "listing" ? "chip-active" : ""
+                }`}
+              >
+                Bu ilan
+              </button>
             </div>
-            <p className="mt-3 text-sm text-muted-2">
-              Henüz değerlendirme yok. Onaylanan satışlardan sonra alıcılar puan verir.
-            </p>
+
+            <div className="mt-3 space-y-2">
+              {reviews.length === 0 && (
+                <p className="text-sm text-muted-2">
+                  Henüz değerlendirme yok. Onaylanan satışlardan sonra alıcılar puan verir.
+                </p>
+              )}
+              {reviews.map((review) => (
+                <div key={review.id} className="rounded-xl border border-line-soft bg-white/3 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-white/8 text-[0.6rem] font-bold text-muted">
+                      {review.reviewer?.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={review.reviewer.avatar_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        (review.reviewer?.username ?? "?").charAt(0).toUpperCase()
+                      )}
+                    </span>
+                    <span className="text-[0.75rem] font-semibold">
+                      @{review.reviewer?.username ?? "alıcı"}
+                    </span>
+                    <span className="ml-auto inline-flex items-center gap-0.5 text-[0.7rem] text-accent">
+                      <StarIcon width={11} height={11} /> {review.overall}/5
+                    </span>
+                  </div>
+                  {review.comment && (
+                    <p className="mt-2 text-[0.78rem] leading-relaxed text-muted">
+                      {review.comment}
+                    </p>
+                  )}
+                  <p className="mt-1.5 text-[0.6rem] text-muted-2">
+                    {new Date(review.created_at).toLocaleDateString("tr-TR")}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* İletişim modalı */}
-      {contactOpen && (
+      {/* İletişim / satış modalı */}
+      {(contactOpen || sellOpen) && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
           <button
             type="button"
             className="absolute inset-0 bg-black/65 backdrop-blur-sm"
-            onClick={() => setContactOpen(false)}
+            onClick={() => {
+              setContactOpen(false);
+              setSellOpen(false);
+            }}
             aria-label="Kapat"
           />
-          <div className="animate-pop relative w-full max-w-md rounded-t-2xl border border-line bg-surface p-5 sm:rounded-2xl">
+          <div className="animate-pop relative max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-line bg-surface p-5 sm:rounded-2xl">
             <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold">Satıcıya mesaj</h2>
+              <h2 className="text-base font-bold">
+                {sellOpen ? "Satış bildir" : "Satıcıya mesaj"}
+              </h2>
               <button
                 type="button"
-                onClick={() => setContactOpen(false)}
+                onClick={() => {
+                  setContactOpen(false);
+                  setSellOpen(false);
+                }}
                 className="grid h-8 w-8 place-items-center rounded-lg text-muted-2 hover:bg-white/5 hover:text-text"
                 aria-label="Kapat"
               >
@@ -317,39 +524,83 @@ export function ListingDetailClient() {
               </button>
             </div>
 
-            <div className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-white/3 p-2">
-              {listing?.images?.[0] && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={listing.images[0]}
-                  alt=""
-                  className="h-11 w-11 rounded-lg object-cover"
-                />
-              )}
-              <div className="min-w-0">
-                <p className="truncate text-[0.78rem] font-semibold">{listing?.title}</p>
-                <p className="text-[0.68rem] text-muted-2">
-                  {listing ? formatPrice(listing.price) : ""}
-                </p>
+            {listing?.images?.[0] && (
+              <div className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-white/3 p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={listing.images[0]} alt="" className="h-11 w-11 rounded-lg object-cover" />
+                <div className="min-w-0">
+                  <p className="truncate text-[0.78rem] font-semibold">{listing.title}</p>
+                  <p className="text-[0.68rem] text-muted-2">{formatPrice(listing.price)}</p>
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="mt-3 rounded-xl border border-line-soft bg-ink/70 p-3">
-              <p className="text-[0.72rem] font-semibold text-accent">Şu ilanla ilgileniyorum;</p>
-              <p className="mt-1 text-sm text-muted">Merhaba, bu ilan hâlâ satılık mı?</p>
-            </div>
-
-            <Link
-              href="/mesajlar"
-              className="btn btn-primary mt-3 h-11 w-full"
-              onClick={() => setContactOpen(false)}
-            >
-              Sohbete git
-            </Link>
-            <p className="mt-2 text-center text-[0.65rem] text-muted-2">
-              Mesajlaşma bir sonraki güncellemede aktif olacak; ilan otomatik olarak sohbete
-              eklenecek.
-            </p>
+            {sellOpen ? (
+              sellDone ? (
+                <div className="py-6 text-center">
+                  <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-mint/30 bg-mint/10 text-mint">
+                    <CheckIcon width={22} height={22} />
+                  </span>
+                  <p className="mt-3 text-sm font-semibold">Satış bildirimi gönderildi</p>
+                  <p className="mt-1 text-xs text-muted-2">
+                    Alıcı onayladığında başarılı işlem sayın artar.
+                  </p>
+                  <Link href="/siparisler" className="btn btn-primary mt-4 h-10 px-4 text-sm">
+                    Siparişlere git
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <p className="mt-3 text-xs text-muted-2">
+                    Bu ilan için konuştuğun kişilerden müşteriyi seç:
+                  </p>
+                  {buyers.length === 0 ? (
+                    <p className="mt-3 rounded-xl border border-line-soft bg-white/3 px-3 py-4 text-xs text-muted-2">
+                      Bu ilan için henüz sohbet yok. Alıcı sana mesaj attığında burada listelenir.
+                    </p>
+                  ) : (
+                    <div className="mt-2 space-y-1.5">
+                      {buyers.map((buyer) => (
+                        <button
+                          key={buyer.id}
+                          type="button"
+                          disabled={sending}
+                          onClick={() => markSold(buyer.id)}
+                          className="flex w-full items-center gap-2 rounded-lg border border-line-soft bg-white/3 px-3 py-2.5 text-left text-sm hover:border-accent/40"
+                        >
+                          <span className="grid h-7 w-7 place-items-center rounded-full bg-white/8 text-[0.6rem] font-bold">
+                            {buyer.username.charAt(0).toUpperCase()}
+                          </span>
+                          @{buyer.username}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )
+            ) : (
+              <>
+                <p className="mt-3 text-[0.72rem] font-semibold text-accent">
+                  Şu ilanla ilgileniyorum;
+                </p>
+                <textarea
+                  value={contactText}
+                  onChange={(event) => setContactText(event.target.value)}
+                  rows={4}
+                  className="field mt-1 resize-y"
+                  maxLength={1500}
+                />
+                {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+                <button
+                  type="button"
+                  onClick={sendContactMessage}
+                  disabled={sending}
+                  className="btn btn-primary mt-3 h-11 w-full disabled:opacity-60"
+                >
+                  <MessageIcon width={16} height={16} /> Mesajı Gönder
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

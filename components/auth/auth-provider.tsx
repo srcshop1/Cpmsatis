@@ -74,13 +74,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!supabase) return fallback;
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("profiles")
-        .select("username, avatar_url, rating, sales_count")
+        .select(
+          "username, avatar_url, rating, sales_count, review_count, verified_seller, equipped_frame",
+        )
         .eq("id", authUser.id)
         .maybeSingle();
 
+      // Şema henüz güncellenmediyse temel kolonlarla devam et
+      if (error) {
+        const retry = await supabase
+          .from("profiles")
+          .select("username, avatar_url, rating, sales_count")
+          .eq("id", authUser.id)
+          .maybeSingle();
+        data = retry.data as typeof data;
+        error = retry.error;
+      }
+
       if (error || !data) return fallback;
+
+      void supabase
+        .from("profiles")
+        .update({ last_seen_at: new Date().toISOString() })
+        .eq("id", authUser.id)
+        .then(() => undefined);
 
       return {
         id: authUser.id,
@@ -89,6 +108,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         avatarUrl: data.avatar_url,
         rating: data.rating,
         salesCount: data.sales_count,
+        reviewCount: data.review_count,
+        verifiedSeller: data.verified_seller,
+        frame: data.equipped_frame,
         createdAt: authUser.created_at,
       };
     },
