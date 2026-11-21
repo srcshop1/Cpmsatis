@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { BellIcon, LogoutIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { Logo } from "@/components/logo";
+import { AnnouncementBar } from "@/components/announcement-bar";
 import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -48,6 +49,7 @@ export function SiteHeader() {
   }
 
   return (
+    <>
     <header className="sticky top-0 z-40 border-b border-line-soft/80 bg-ink/85 backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4">
         <Logo />
@@ -147,5 +149,7 @@ export function SiteHeader() {
         </div>
       </div>
     </header>
+    <AnnouncementBar />
+    </>
   );
 }
