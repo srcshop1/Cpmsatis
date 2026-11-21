@@ -93,13 +93,33 @@ export function ListingDetailClient() {
     let cancelled = false;
 
     const load = async () => {
-      const { data, error: queryError } = await supabase
+      const baseColumns =
+        "id,title,description_html,price,category,images,created_at,featured_until,seller_id";
+
+      let queryResult = await supabase
         .from(LISTINGS_TABLE)
-        .select(
-          "id,title,description_html,price,category,categories,images,created_at,featured_until,seller_id",
-        )
+        .select(`${baseColumns},categories`)
         .eq("id", listingId)
         .maybeSingle();
+
+      let data: Record<string, unknown> | null = queryResult.data as unknown as Record<
+        string,
+        unknown
+      > | null;
+      let queryError = queryResult.error;
+
+      // categories kolonu yoksa (v4 SQL çalıştırılmamış) temel alanlarla devam et
+      if (queryError && /categories|column/i.test(queryError.message)) {
+        const retry = await supabase
+          .from(LISTINGS_TABLE)
+          .select(baseColumns)
+          .eq("id", listingId)
+          .maybeSingle();
+        data = retry.data
+          ? { ...(retry.data as unknown as Record<string, unknown>), categories: null }
+          : null;
+        queryError = retry.error;
+      }
 
       if (cancelled) return;
       if (queryError) {
@@ -112,7 +132,7 @@ export function ListingDetailClient() {
         return;
       }
 
-      const detail = data as Detail;
+      const detail = data as unknown as Detail;
       setListing(detail);
 
       const profiles = await loadProfileMini(supabase, [detail.seller_id]);

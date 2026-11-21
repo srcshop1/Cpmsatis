@@ -4,26 +4,19 @@ Site anahtarlar yokken **demo modunda** çalışır. Anahtarları girince gerçe
 
 ---
 
-## 1) Tabloları kur (tek sefer)
+## 1) Hepsini tek seferde kur (tek dosya)
 
 1. Supabase panelinde sol menüden **SQL Editor** → **New query**.
-2. Bu repodaki **`supabase/schema-v3.sql`** dosyasının **tamamını** kopyala, yapıştır.
-3. **Run** (Ctrl + Enter) → "Success" yazmalı.
+2. Bu repodaki **`supabase/HEPSI.sql`** dosyasının **tamamını** kopyala, yapıştır.
+3. **Run** (Ctrl + Enter). En sonda `kontrol | durum` diye bir liste çıkar; her satırda **var** yazmalı.
 
-Bu dosya her şeyi kurar: profiller, ilanlar, sohbetler, satışlar, değerlendirmeler,
-destek talepleri, onaylı satıcı başvuruları, öne çıkarma talepleri, bildiriler,
-taglar, duyurular, resim kovaları (storage) ve tüm yetki (RLS) kuralları.
+Bu tek dosya her şeyi kurar/onarır: profiller, ilanlar (çoklu kategori, 15 gün süre),
+sohbetler, satışlar, değerlendirmeler, destek talepleri, onaylı satıcı başvuruları,
+öne çıkarma, bildiriler, taglar, duyurular, roller, depo kovaları (avatars, listing-images),
+tüm yetki (RLS) kuralları ve fonksiyonlar.
 
-> Dosya baştan sona bir kez çalıştırılır. Tekrar çalıştırmak da güvenlidir.
-
-Ardından **`supabase/schema-v4.sql`** dosyasını da aynı yere yapıştırıp çalıştır:
-çoklu kategori, 15 günlük ilan süresi, yetkili etiketi, ban/işlem fonksiyonları ve
-profil fotoğrafı deposu izinleri bu dosyada.
-
-**Butonlar "Could not find the function ... in the schema cache" derse:** `supabase/onarim.sql`
-dosyasını aynı yerde çalıştır. Kısa onarım dosyasıdır, veri silmez.
-
----
+> Tekrar tekrar çalıştırılabilir, veri silmez. `schema-v3.sql` / `schema-v4.sql` / `onarim.sql`
+> dosyalarının hepsi bunun içinde.
 
 ## 2) Kurucu hesabını aç
 

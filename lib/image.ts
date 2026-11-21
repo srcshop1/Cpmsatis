@@ -47,6 +47,16 @@ export async function prepareAvatar(file: File, maxSize = 512, quality = 0.85): 
   }
 }
 
+/** Küçük görseli doğrudan veri adresine çevirir (depo yoksa yedek yol) */
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Fotoğraf okunamadı."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();

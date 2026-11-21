@@ -17,7 +17,7 @@ import {
 } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { prepareAvatar, storageErrorMessage } from "@/lib/image";
+import { blobToDataUrl, prepareAvatar, storageErrorMessage } from "@/lib/image";
 import { MAX_USERNAME_LENGTH, validateUsername } from "@/lib/validation";
 import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
 import { myStaffRole } from "@/lib/social";
@@ -112,14 +112,26 @@ export default function ProfilePage() {
           upsert: false,
         });
 
+      let avatarUrl: string;
+      let usedFallback = false;
+
       if (uploadError) {
-        throw new Error(storageErrorMessage(uploadError.message));
+        // Depo (bucket) kurulmamışsa fotoğrafı doğrudan profile yaz
+        const fallbackable = /bucket not found|not found|security|policy|mime/i.test(
+          uploadError.message,
+        );
+        if (!fallbackable) {
+          throw new Error(storageErrorMessage(uploadError.message));
+        }
+        avatarUrl = await blobToDataUrl(blob);
+        usedFallback = true;
+      } else {
+        avatarUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
       }
 
-      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ avatar_url: data.publicUrl })
+        .update({ avatar_url: avatarUrl })
         .eq("id", user.id);
 
       if (updateError) {
@@ -127,7 +139,11 @@ export default function ProfilePage() {
       }
 
       await refreshUser();
-      setNotice("Profil fotoğrafın güncellendi.");
+      setNotice(
+        usedFallback
+          ? "Profil fotoğrafın kaydedildi. (Depo kurulmadığı için profil içinde saklandı — schema-v4.sql çalıştırınca depoya taşınır.)"
+          : "Profil fotoğrafın güncellendi.",
+      );
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "Fotoğraf yüklenemedi, tekrar dene.",
