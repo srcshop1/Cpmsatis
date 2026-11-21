@@ -87,10 +87,6 @@ export default function CreateListingPage() {
       setError(`Başlık en fazla ${MAX_LISTING_TITLE} karakter olabilir.`);
       return;
     }
-    if (images.length === 0) {
-      setError("En az 1 görsel eklemelisin.");
-      return;
-    }
     if (categories.length === 0) {
       setError("En az 1 kategori seçmelisin.");
       return;
@@ -191,13 +187,14 @@ export default function CreateListingPage() {
         {/* Görseller */}
         <section className="card p-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold">Görseller</h2>
+            <h2 className="text-sm font-bold">Görseller (isteğe bağlı)</h2>
             <span className="text-[0.68rem] text-muted-2">
               {images.length}/{MAX_LISTING_IMAGES}
             </span>
           </div>
           <p className="mt-1 text-[0.68rem] text-muted-2">
-            İlk görsel kapak olur. Kartlarda kare görünür, ilanda orijinal boyutuyla açılır.
+            İlk görsel kapak olur. Görsel eklemezsen ilanda boş bir çerçeve görünür, istediğin
+            zaman ekleyebilirsin.
           </p>
 
           <div className="mt-3 grid grid-cols-3 gap-2">

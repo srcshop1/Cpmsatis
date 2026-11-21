@@ -87,7 +87,7 @@ export function ReasonDialog({
                   className={`h-9 flex-1 rounded-xl border text-[0.78rem] font-bold transition ${
                     choice === option.key
                       ? "border-accent/60 bg-accent/15 text-accent"
-                      : "border-line bg-white/4 text-muted hover:text-ink"
+                      : "border-line bg-white/4 text-muted hover:text-text"
                   }`}
                 >
                   {option.label}
