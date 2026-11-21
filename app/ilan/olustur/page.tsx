@@ -161,7 +161,7 @@ export default function CreateListingPage() {
 
       setStep("Tamamlandı!");
       images.forEach((image) => URL.revokeObjectURL(image.url));
-      router.push(`/ilan/${data.id}`);
+      router.push(`/ilan/goruntule?id=${data.id}`);
     } catch (submitError) {
       setError(
         submitError instanceof Error

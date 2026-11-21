@@ -132,7 +132,7 @@ export default function MessagesPage() {
               | null;
             return (
               <div key={conversation.id} className="card flex items-center gap-3 p-3">
-                <Link href={`/mesajlar/${conversation.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                <Link href={`/mesajlar/sohbet?id=${conversation.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                   <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-accent-soft to-accent-deep text-sm font-extrabold text-ink">
                     {other?.avatar_url ? (
                       // eslint-disable-next-line @next/next/no-img-element

@@ -170,7 +170,7 @@ export default function OrdersPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <Link
-                      href={`/ilan/${sale.listing_id}`}
+                      href={`/ilan/goruntule?id=${sale.listing_id}`}
                       className="line-clamp-2 text-[0.85rem] font-semibold hover:text-accent"
                     >
                       {sale.listing?.title ?? "İlan"}
