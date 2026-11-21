@@ -51,7 +51,7 @@ export function SiteHeader() {
   return (
     <>
     <header className="sticky top-0 z-40 border-b border-line-soft/80 bg-ink/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-2 px-3 sm:gap-3 sm:px-4">
         <Logo />
 
         <nav className="ml-3 hidden items-center gap-0.5 lg:flex" aria-label="Ana menü">
@@ -71,7 +71,7 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex min-w-0 items-center gap-2">
           <Link
             href="/ilanlar"
             className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-white/3 text-muted transition hover:text-text lg:hidden"
@@ -109,7 +109,7 @@ export function SiteHeader() {
 
               <Link
                 href="/profil"
-                className="flex items-center gap-2 rounded-xl border border-line bg-white/3 py-1.5 pl-1.5 pr-3 transition hover:border-[#34405a]"
+                className="flex min-w-0 items-center gap-2 rounded-xl border border-line bg-white/3 py-1.5 pl-1.5 pr-2 transition hover:border-[#34405a] sm:pr-3"
               >
                 <FramedAvatar
                   src={user.avatarUrl}
@@ -122,14 +122,18 @@ export function SiteHeader() {
                   {user.username}
                 </span>
                 {user.verifiedSeller && <VerifiedTick size={13} />}
-                {user.staffTag && <StaffBadge tag={user.staffTag} small />}
+                {user.staffTag && (
+                  <span className="hidden sm:inline-flex">
+                    <StaffBadge tag={user.staffTag} small />
+                  </span>
+                )}
               </Link>
 
               <button
                 type="button"
                 onClick={handleSignOut}
                 disabled={pending}
-                className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-white/3 text-muted transition hover:border-danger/50 hover:text-danger disabled:opacity-60"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-line bg-white/3 text-muted transition hover:border-danger/50 hover:text-danger disabled:opacity-60"
                 aria-label="Çıkış yap"
                 title="Çıkış yap"
               >
