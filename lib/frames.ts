@@ -65,9 +65,11 @@ export function frameTone(slug: string | null | undefined) {
 export function ownedFrames(input: {
   tags?: string[] | null;
   staffTag?: string | null;
+  frames?: string[] | null;
 }) {
   const set = new Set<string>(["member"]);
   for (const tag of input.tags ?? []) set.add(tag);
+  for (const frame of input.frames ?? []) set.add(frame);
   if (input.staffTag) set.add(input.staffTag);
   return set;
 }

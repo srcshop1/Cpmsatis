@@ -806,6 +806,42 @@ drop policy if exists "Duyuru silme kurucu" on public.announcements;
 create policy "Duyuru silme kurucu" on public.announcements for delete to authenticated
   using (public.my_staff_role() = 'owner');
 
+-- ---------- 5c) ÇERÇEVE VERME ----------
+create table if not exists public.user_frames (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  frame text not null check (frame in ('member','verified_seller','vip','premium','moderator','owner')),
+  granted_by uuid references public.profiles (id) on delete set null,
+  granted_at timestamptz not null default now(),
+  primary key (user_id, frame)
+);
+alter table public.user_frames enable row level security;
+
+drop policy if exists "Çerçeve herkese açık" on public.user_frames;
+create policy "Çerçeve herkese açık" on public.user_frames for select using (true);
+drop policy if exists "Çerçeve verme yetkili" on public.user_frames;
+create policy "Çerçeve verme yetkili" on public.user_frames for insert to authenticated
+  with check (public.is_staff());
+drop policy if exists "Çerçeve silme yetkili" on public.user_frames;
+create policy "Çerçeve silme yetkili" on public.user_frames for delete to authenticated
+  using (public.is_staff());
+
+create or replace function public.admin_set_frame(p_user uuid, p_frame text, p_remove boolean default false)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+  if p_frame not in ('member','verified_seller','vip','premium','moderator','owner') then
+    raise exception 'Geçersiz çerçeve';
+  end if;
+  if p_remove then
+    delete from public.user_frames where user_id = p_user and frame = p_frame;
+  else
+    insert into public.user_frames (user_id, frame, granted_by)
+    values (p_user, p_frame, auth.uid())
+    on conflict (user_id, frame) do nothing;
+  end if;
+end; $$;
+grant execute on function public.admin_set_frame(uuid, text, boolean) to authenticated;
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 
@@ -817,7 +853,7 @@ notify pgrst, 'reload schema';
 select 'tablo: ' || tablename as kontrol, 'var' as durum
 from pg_tables
 where schemaname = 'public'
-  and tablename in ('profiles','listings','user_roles','user_tags','notifications',
+  and tablename in ('profiles','listings','user_roles','user_tags','user_frames','notifications',
                     'conversations','conversation_state','messages','sales','reviews',
                     'support_tickets','seller_applications','featured_requests','reports',
                     'announcements')
@@ -827,7 +863,7 @@ from pg_proc
 where pronamespace = 'public'::regnamespace
   and proname in ('my_staff_role','is_staff','email_for_username','notify','mark_sold',
                   'buyer_confirm','approve_sale','resolve_sales','admin_set_tag','admin_set_role',
-                  'admin_set_banned','admin_delete_account','admin_feature_listing',
+                  'admin_set_frame','admin_set_banned','admin_delete_account','admin_feature_listing',
                   'admin_set_listing_status','admin_remove_role','expire_listings','renew_listing')
 union all
 select 'depo: ' || id, 'var' from storage.buckets where id in ('avatars','listing-images')

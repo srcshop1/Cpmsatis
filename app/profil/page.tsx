@@ -41,6 +41,7 @@ export default function ProfilePage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const [tags, setTags] = useState<string[]>([]);
+  const [grantedFrames, setGrantedFrames] = useState<string[]>([]);
   const [role, setRole] = useState<string | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [averages, setAverages] = useState<ReviewAverages | null>(null);
@@ -68,6 +69,14 @@ export default function ProfilePage() {
         .select("tag")
         .eq("user_id", user.id);
       if (!cancelled) setTags(((tagRows ?? []) as { tag: string }[]).map((row) => row.tag));
+
+      const { data: frameRows } = await supabase
+        .from("user_frames")
+        .select("frame")
+        .eq("user_id", user.id);
+      if (!cancelled) {
+        setGrantedFrames(((frameRows ?? []) as { frame: string }[]).map((row) => row.frame));
+      }
 
       const staffRole = await myStaffRole(supabase);
       if (!cancelled) setRole(staffRole);
@@ -235,7 +244,7 @@ export default function ProfilePage() {
 
   if (!user) return null;
 
-  const owned = ownedFrames({ tags, staffTag: user.staffTag ?? role });
+  const owned = ownedFrames({ tags, staffTag: user.staffTag ?? role, frames: grantedFrames });
   const activeFrame = findFrame(user.frame);
   const staffTag = user.staffTag ?? role;
 
