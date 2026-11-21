@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth/auth-provider";
-import { BellIcon, CheckIcon } from "@/components/icons";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { BellIcon, CheckIcon, TrashIcon, XIcon } from "@/components/icons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { resolveSales } from "@/lib/sales";
 import {
@@ -19,6 +20,11 @@ export default function NotificationsPage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!supabase || !user) return;
@@ -57,23 +63,125 @@ export default function NotificationsPage() {
     setItems((prev) => prev.map((item) => ({ ...item, read_at: item.read_at ?? now })));
   }
 
+  function startSelect() {
+    setError(null);
+    setSelectMode(true);
+    setSelected([]);
+  }
+
+  function stopSelect() {
+    setSelectMode(false);
+    setSelected([]);
+  }
+
+  function toggle(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]));
+  }
+
+  const allSelected = items.length > 0 && selected.length === items.length;
+
+  function toggleAll() {
+    setSelected(allSelected ? [] : items.map((item) => item.id));
+  }
+
+  async function deleteSelected() {
+    if (!supabase || selected.length === 0) return;
+    setDeleting(true);
+    setError(null);
+    const { error: deleteError } = await supabase
+      .from("notifications")
+      .delete()
+      .in("id", selected);
+    setDeleting(false);
+    setConfirmDelete(false);
+
+    if (deleteError) {
+      setError("Seçilenler silinemedi. Lütfen tekrar dene.");
+      return;
+    }
+
+    const removed = new Set(selected);
+    setItems((prev) => prev.filter((item) => !removed.has(item.id)));
+    stopSelect();
+  }
+
   const unread = items.filter((item) => !item.read_at).length;
 
   return (
     <AppShell>
       <div className="flex items-end justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">Bildirimler</h1>
           <p className="mt-1 text-xs text-muted-2 sm:text-sm">
-            {unread > 0 ? `${unread} okunmamış bildirim` : "Tümü okundu"}
+            {selectMode
+              ? selected.length > 0
+                ? `${selected.length} bildirim seçildi`
+                : "Silmek için bildirimlere dokun"
+              : unread > 0
+                ? `${unread} okunmamış bildirim`
+                : "Tümü okundu"}
           </p>
         </div>
-        {unread > 0 && (
-          <button type="button" onClick={markAll} className="btn btn-ghost h-9 px-3 text-xs">
-            <CheckIcon width={14} height={14} /> Tümünü okundu yap
-          </button>
+
+        {!selectMode ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {unread > 0 && (
+              <button
+                type="button"
+                onClick={markAll}
+                aria-label="Tümünü okundu yap"
+                className="btn btn-ghost h-9 px-2.5 text-xs"
+              >
+                <CheckIcon width={14} height={14} />
+                <span className="hidden sm:inline">Tümünü okundu yap</span>
+              </button>
+            )}
+            {items.length > 0 && (
+              <button
+                type="button"
+                onClick={startSelect}
+                aria-label="Bildirim seç ve sil"
+                className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-white/4 text-muted transition hover:border-danger/50 hover:text-danger"
+              >
+                <TrashIcon width={16} height={16} />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={toggleAll}
+              className="btn btn-ghost h-9 px-2.5 text-[0.7rem]"
+            >
+              {allSelected ? "Seçimi kaldır" : "Tümünü seç"}
+            </button>
+            <button
+              type="button"
+              onClick={stopSelect}
+              aria-label="Seçimi bırak"
+              className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-white/4 text-muted transition hover:text-ink"
+            >
+              <XIcon width={15} height={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              disabled={selected.length === 0}
+              aria-label="Seçilenleri sil"
+              className="grid h-9 w-9 place-items-center rounded-xl bg-danger text-white transition hover:brightness-110 disabled:opacity-40"
+            >
+              <TrashIcon width={16} height={16} />
+            </button>
+          </div>
         )}
       </div>
+
+      {error && (
+        <div className="mt-3 rounded-xl border border-danger/35 bg-danger/10 px-3.5 py-2.5 text-xs text-[#ffb3bb]">
+          {error}
+        </div>
+      )}
 
       {loading && <p className="mt-6 text-sm text-muted-2">Yükleniyor…</p>}
 
@@ -97,13 +205,26 @@ export default function NotificationsPage() {
       {!loading && items.length > 0 && (
         <div className="mt-5 space-y-2">
           {items.map((item) => {
+            const checked = selected.includes(item.id);
             const content = (
               <>
-                <span
-                  className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
-                    item.read_at ? "bg-transparent" : "bg-accent"
-                  }`}
-                />
+                {selectMode ? (
+                  <span
+                    className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border transition ${
+                      checked
+                        ? "border-danger bg-danger text-white"
+                        : "border-line bg-white/4 text-transparent"
+                    }`}
+                  >
+                    <CheckIcon width={12} height={12} />
+                  </span>
+                ) : (
+                  <span
+                    className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
+                      item.read_at ? "bg-transparent" : "bg-accent"
+                    }`}
+                  />
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center justify-between gap-2">
                     <span className="truncate text-sm font-semibold">{item.title}</span>
@@ -120,15 +241,30 @@ export default function NotificationsPage() {
               </>
             );
 
+            const rowClass = `card flex items-start gap-2.5 p-3.5 text-left transition ${
+              selectMode && checked
+                ? "border-danger/60 bg-danger/10"
+                : selectMode
+                  ? "hover:border-danger/40"
+                  : "hover:border-accent/40"
+            } ${item.read_at && !checked ? "opacity-70" : ""}`;
+
+            if (selectMode) {
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => toggle(item.id)}
+                  aria-pressed={checked}
+                  className={`${rowClass} w-full`}
+                >
+                  {content}
+                </button>
+              );
+            }
+
             return item.link ? (
-              <Link
-                key={item.id}
-                href={item.link}
-                onClick={() => markRead(item.id)}
-                className={`card flex items-start gap-2.5 p-3.5 transition hover:border-accent/40 ${
-                  item.read_at ? "opacity-70" : ""
-                }`}
-              >
+              <Link key={item.id} href={item.link} onClick={() => markRead(item.id)} className={rowClass}>
                 {content}
               </Link>
             ) : (
@@ -136,9 +272,7 @@ export default function NotificationsPage() {
                 key={item.id}
                 type="button"
                 onClick={() => markRead(item.id)}
-                className={`card flex w-full items-start gap-2.5 p-3.5 text-left transition hover:border-accent/40 ${
-                  item.read_at ? "opacity-70" : ""
-                }`}
+                className={`${rowClass} w-full`}
               >
                 {content}
               </button>
@@ -146,6 +280,17 @@ export default function NotificationsPage() {
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Seçilen bildirimler silinsin mi?"
+        description={`${selected.length} bildirim kalıcı olarak silinecek. Bu işlem geri alınamaz.`}
+        confirmLabel="Sil"
+        danger
+        busy={deleting}
+        onConfirm={() => void deleteSelected()}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </AppShell>
   );
 }
