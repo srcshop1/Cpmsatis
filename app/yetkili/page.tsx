@@ -16,6 +16,8 @@ import {
 } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { MemberDetail } from "@/components/admin/member-detail";
+import { frames as frameList } from "@/lib/frames";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { myStaffRole } from "@/lib/social";
 import { StaffBadge, VerifiedTick } from "@/components/user-badge";
@@ -28,6 +30,8 @@ type Tab =
   | "reports"
   | "listings"
   | "members"
+  | "usersDetails"
+  | "frames"
   | "sales"
   | "tags"
   | "roles"
@@ -41,6 +45,8 @@ const TABS: { key: Tab; label: string; ownerOnly?: boolean }[] = [
   { key: "reports", label: "Bildiriler" },
   { key: "listings", label: "İlanlar" },
   { key: "members", label: "Üyeler" },
+  { key: "usersDetails", label: "Kullanıcı Verileri" },
+  { key: "frames", label: "Çerçeve Ver" },
   { key: "sales", label: "Satışlar" },
   { key: "tags", label: "Tag Ver" },
   { key: "roles", label: "Moderatör", ownerOnly: true },
@@ -132,6 +138,9 @@ export default function AdminPage() {
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [salesRows, setSalesRows] = useState<SaleRow[]>([]);
   const [memberQuery, setMemberQuery] = useState("");
+  const [detailUser, setDetailUser] = useState<string | null>(null);
+  const [frameQuery, setFrameQuery] = useState("");
+  const [frameChoice, setFrameChoice] = useState("vip");
   const [confirmUser, setConfirmUser] = useState<MemberRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -241,7 +250,7 @@ export default function AdminPage() {
       await loadProfiles(rows.map((row) => row.seller_id));
     }
 
-    if (tab === "members") {
+    if (tab === "members" || tab === "usersDetails") {
       let { data, error } = await supabase
         .from("profiles")
         .select("id, username, email, sales_count, verified_seller, staff_tag, banned, created_at")
@@ -477,6 +486,33 @@ export default function AdminPage() {
     setBusy(null);
     setNotice(error ? "Rol verilemedi. Lütfen tekrar dene." : `Rol verildi: ${role}`);
     await loadTab();
+  }
+
+  async function grantFrame(remove: boolean) {
+    if (!supabase) return;
+    setNotice(null);
+    const profile = await findProfile(frameQuery);
+    if (!profile) {
+      setNotice("Kullanıcı bulunamadı.");
+      return;
+    }
+    setBusy("frame");
+    const { error } = await supabase.rpc("admin_set_frame", {
+      p_user: profile.id,
+      p_frame: frameChoice,
+      p_remove: remove,
+    });
+    setBusy(null);
+    if (error) {
+      console.error("[cerceve]", error.message);
+      setNotice("Çerçeve kaydedilemedi. Lütfen tekrar dene.");
+      return;
+    }
+    setNotice(
+      `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${
+        frameList.find((frame) => frame.slug === frameChoice)?.name ?? frameChoice
+      }`,
+    );
   }
 
   async function findProfile(query: string) {
@@ -1076,6 +1112,95 @@ export default function AdminPage() {
           </>
         )}
 
+        {tab === "usersDetails" && (
+          <>
+            <input
+              className="field"
+              value={memberQuery}
+              onChange={(event) => setMemberQuery(event.target.value)}
+              placeholder="İsim veya e-posta ara"
+            />
+            {members.length === 0 && <Empty text="Kullanıcı yok." />}
+            {members
+              .filter((member) => {
+                const needle = memberQuery.trim().toLocaleLowerCase("tr");
+                if (!needle) return true;
+                return (
+                  member.username.toLocaleLowerCase("tr").includes(needle) ||
+                  (member.email ?? "").toLocaleLowerCase("tr").includes(needle)
+                );
+              })
+              .map((member) => (
+                <div key={member.id} className="card flex items-center gap-3 p-3.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                      @{member.username}
+                      {member.verified_seller && <VerifiedTick size={12} />}
+                      {member.staff_tag && <StaffBadge tag={member.staff_tag} small />}
+                    </p>
+                    <p className="truncate text-[0.7rem] text-muted-2">{member.email ?? "—"}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDetailUser(member.id)}
+                    className="btn btn-ghost h-8 shrink-0 px-3 text-[0.7rem]"
+                  >
+                    İncele
+                  </button>
+                </div>
+              ))}
+          </>
+        )}
+
+        {tab === "frames" && (
+          <div className="card p-4">
+            <h2 className="text-sm font-bold">Çerçeve Ver</h2>
+            <p className="mt-1 text-[0.7rem] text-muted-2">
+              Kullanıcı adı veya e-posta yaz, çerçeve seç. Verilen çerçeve kişinin profilinde
+              seçilebilir olur.
+            </p>
+            <input
+              className="field mt-3"
+              value={frameQuery}
+              onChange={(event) => setFrameQuery(event.target.value)}
+              placeholder="kullanıcı adı veya e-posta"
+            />
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {frameList.map((frame) => (
+                <button
+                  key={frame.slug}
+                  type="button"
+                  onClick={() => setFrameChoice(frame.slug)}
+                  className={`chip ${frameChoice === frame.slug ? "chip-active" : ""}`}
+                >
+                  <span
+                    className={`inline-block h-2.5 w-2.5 rounded-full bg-gradient-to-br ${frame.tone}`}
+                  />
+                  {frame.name}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => grantFrame(false)}
+                disabled={busy === "frame"}
+                className="btn btn-primary h-10 flex-1 text-sm"
+              >
+                {busy === "frame" ? <Spinner /> : "Çerçeve Ver"}
+              </button>
+              <button
+                type="button"
+                onClick={() => grantFrame(true)}
+                disabled={busy === "frame"}
+                className="btn btn-ghost h-10 flex-1 text-sm"
+              >
+                Kaldır
+              </button>
+            </div>
+          </div>
+        )}
+
         {tab === "tags" && (
           <div className="card p-4">
             <h2 className="text-sm font-bold">Tag Ver / Al</h2>
@@ -1226,6 +1351,10 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+      {detailUser && (
+        <MemberDetail userId={detailUser} onClose={() => setDetailUser(null)} />
+      )}
+
       <ConfirmDialog
         open={confirmAnnouncement}
         title="Duyuru kaldırılsın mı?"
