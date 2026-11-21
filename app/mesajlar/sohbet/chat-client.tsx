@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
   CheckIcon,
@@ -59,6 +60,7 @@ export function ChatClient() {
   const [reportReason, setReportReason] = useState(REPORT_REASONS[0]);
   const [reportDetails, setReportDetails] = useState("");
   const [reportDone, setReportDone] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -170,7 +172,7 @@ export function ChatClient() {
 
   async function clearChat() {
     if (!supabase || !user || !conversation) return;
-    if (!window.confirm("Sohbeti temizlemek istediğine emin misin?")) return;
+    setConfirmClear(false);
     const now = new Date().toISOString();
     await saveConversationState(supabase, conversation.id, user.id, { cleared_at: now });
     setClearedAt(now);
@@ -258,7 +260,7 @@ export function ChatClient() {
                   </button>
                   <button
                     type="button"
-                    onClick={clearChat}
+                    onClick={() => setConfirmClear(true)}
                     className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[0.78rem] text-text hover:bg-white/5"
                   >
                     <TrashIcon width={15} height={15} /> Sohbeti temizle
@@ -485,6 +487,15 @@ export function ChatClient() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmClear}
+        title="Sohbet temizlensin mi?"
+        description="Bu sohbetteki mesajlar senin için gizlenir."
+        confirmLabel="Temizle"
+        danger
+        onConfirm={clearChat}
+        onCancel={() => setConfirmClear(false)}
+      />
     </AppShell>
   );
 }

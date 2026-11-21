@@ -69,7 +69,8 @@ export default function OrdersPage() {
     });
     setBusyId(null);
     if (rpcError) {
-      setError(rpcError.message);
+      console.error("[siparis]", rpcError.message);
+      setError("İşlem tamamlanamadı. Lütfen tekrar dene.");
       return;
     }
     setError(null);
@@ -82,7 +83,8 @@ export default function OrdersPage() {
     const { error: rpcError } = await supabase.rpc("approve_sale", { p_sale: sale.id });
     setBusyId(null);
     if (rpcError) {
-      setError(rpcError.message);
+      console.error("[siparis]", rpcError.message);
+      setError("İşlem tamamlanamadı. Lütfen tekrar dene.");
       return;
     }
     setError(null);

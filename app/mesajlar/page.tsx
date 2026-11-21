@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAuth } from "@/components/auth/auth-provider";
 import { MessageIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -20,6 +21,7 @@ export default function MessagesPage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!supabase || !user) return;
@@ -72,7 +74,7 @@ export default function MessagesPage() {
 
   async function clearChat(conversationId: string) {
     if (!supabase || !user) return;
-    if (!window.confirm("Bu sohbeti silmek istediğine emin misin?")) return;
+    setConfirmId(null);
     await saveConversationState(supabase, conversationId, user.id, {
       cleared_at: new Date().toISOString(),
     });
@@ -164,7 +166,7 @@ export default function MessagesPage() {
                 </Link>
                 <button
                   type="button"
-                  onClick={() => clearChat(conversation.id)}
+                  onClick={() => setConfirmId(conversation.id)}
                   className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-2 transition hover:bg-danger/10 hover:text-danger"
                   aria-label="Sohbeti sil"
                   title="Sohbeti sil"
@@ -176,6 +178,16 @@ export default function MessagesPage() {
           })}
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(confirmId)}
+        title="Sohbet silinsin mi?"
+        description="Sohbet listeden kaldırılır. Karşı taraf silmez, yeni mesaj gelirse tekrar görünür."
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        danger
+        onConfirm={() => confirmId && clearChat(confirmId)}
+        onCancel={() => setConfirmId(null)}
+      />
     </AppShell>
   );
 }
