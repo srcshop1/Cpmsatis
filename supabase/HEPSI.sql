@@ -842,6 +842,49 @@ begin
 end; $$;
 grant execute on function public.admin_set_frame(uuid, text, boolean) to authenticated;
 
+-- ---------- 5d) YETKİLİ BİLDİRİMİ + KAYIT SİLME ----------
+drop policy if exists "Bildirim ekle yetkili" on public.notifications;
+create policy "Bildirim ekle yetkili" on public.notifications for insert to authenticated
+  with check (public.is_staff());
+
+drop policy if exists "Bildirim silme yetkili" on public.notifications;
+create policy "Bildirim silme yetkili" on public.notifications for delete to authenticated
+  using (public.is_staff());
+
+create or replace function public.admin_notify(
+  p_user uuid,
+  p_title text,
+  p_body text default null,
+  p_link text default null,
+  p_kind text default 'staff'
+)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+  if coalesce(btrim(p_title), '') = '' then raise exception 'Başlık gerekli'; end if;
+  insert into public.notifications (user_id, kind, title, body, link)
+  values (
+    p_user,
+    coalesce(nullif(btrim(p_kind), ''), 'staff'),
+    left(btrim(p_title), 120),
+    p_body,
+    p_link
+  );
+end; $$;
+grant execute on function public.admin_notify(uuid, text, text, text, text) to authenticated;
+
+drop policy if exists "Talep silme yetkili" on public.support_tickets;
+create policy "Talep silme yetkili" on public.support_tickets for delete to authenticated
+  using (public.is_staff());
+
+drop policy if exists "Başvuru silme yetkili" on public.seller_applications;
+create policy "Başvuru silme yetkili" on public.seller_applications for delete to authenticated
+  using (public.is_staff());
+
+drop policy if exists "Öne çıkarma silme yetkili" on public.featured_requests;
+create policy "Öne çıkarma silme yetkili" on public.featured_requests for delete to authenticated
+  using (public.is_staff());
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 
@@ -864,7 +907,8 @@ where pronamespace = 'public'::regnamespace
   and proname in ('my_staff_role','is_staff','email_for_username','notify','mark_sold',
                   'buyer_confirm','approve_sale','resolve_sales','admin_set_tag','admin_set_role',
                   'admin_set_frame','admin_set_banned','admin_delete_account','admin_feature_listing',
-                  'admin_set_listing_status','admin_remove_role','expire_listings','renew_listing')
+                  'admin_set_listing_status','admin_remove_role','expire_listings','renew_listing',
+                  'admin_notify')
 union all
 select 'depo: ' || id, 'var' from storage.buckets where id in ('avatars','listing-images')
 order by 1;
