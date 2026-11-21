@@ -1,42 +1,65 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
-import { loginAction } from "@/app/actions/auth";
+import { useRouter } from "next/navigation";
+import { useState, type FormEvent } from "react";
+import { useAuth } from "@/components/auth/auth-provider";
 import { LockIcon, UserIcon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
-import { initialAuthState } from "@/lib/auth/types";
 import { validateLogin } from "@/lib/validation";
 import { TextField } from "./text-field";
 
 export function LoginForm({ nextPath }: { nextPath?: string }) {
-  const [state, formAction, pending] = useActionState(loginAction, initialAuthState);
+  const router = useRouter();
+  const { signIn } = useAuth();
 
-  const [identifier, setIdentifier] = useState(state.values?.identifier ?? "");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [touched, setTouched] = useState<{ identifier?: boolean; password?: boolean }>({});
   const [showPassword, setShowPassword] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string>>({});
 
   const localErrors = validateLogin({ identifier, password });
 
   function errorFor(field: "identifier" | "password") {
-    if (touched[field]) return localErrors[field] ?? null;
-    if (state.status === "error") return localErrors[field] ?? state.errors?.[field] ?? null;
+    if (touched[field] || serverFieldErrors[field]) {
+      return localErrors[field] ?? serverFieldErrors[field] ?? null;
+    }
     return null;
   }
 
-  const showServerMessage = state.status === "error" && state.message;
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setTouched({ identifier: true, password: true });
+    if (Object.keys(localErrors).length > 0) return;
+
+    setPending(true);
+    setServerError(null);
+    setServerFieldErrors({});
+
+    const result = await signIn({ identifier, password });
+    setPending(false);
+
+    if (!result.ok) {
+      setServerError(result.message);
+      setServerFieldErrors(result.fieldErrors ?? {});
+      return;
+    }
+
+    router.replace(nextPath ?? "/panel");
+    router.refresh();
+  }
 
   return (
-    <form action={formAction} className="space-y-4" noValidate>
-      {nextPath && <input type="hidden" name="next" value={nextPath} />}
-
-      {showServerMessage && (
+    <form onSubmit={onSubmit} className="space-y-4" noValidate>
+      {serverError && (
         <div
           role="alert"
           className="animate-pop rounded-xl border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-[#ffb3bb]"
         >
-          {state.message}
+          {serverError}
         </div>
       )}
 
@@ -74,7 +97,11 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
         onTogglePassword={() => setShowPassword((prev) => !prev)}
       />
 
-      <button type="submit" className="btn btn-primary mt-2 h-12 w-full text-[0.98rem]" disabled={pending}>
+      <button
+        type="submit"
+        className="btn btn-primary mt-2 h-12 w-full text-[0.98rem]"
+        disabled={pending}
+      >
         {pending ? (
           <>
             <Spinner /> Giriş yapılıyor…

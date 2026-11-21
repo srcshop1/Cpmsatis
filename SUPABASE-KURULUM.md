@@ -4,7 +4,7 @@ Bu proje iki modda çalışır:
 
 | Mod | Ne zaman | Veri nerede |
 | --- | --- | --- |
-| **Demo modu** | Supabase anahtarları boşsa | Sunucudaki `.data/` klasöründe (sadece geliştirme) |
+| **Demo modu** | Supabase anahtarları boşsa | Tarayıcıda (localStorage), sadece deneme için |
 | **Supabase modu** | `.env.local` içinde URL + anon key varsa | Supabase Postgres + Supabase Auth |
 
 Anahtarları girdiğin an site otomatik olarak Supabase'e geçer — kodda değişiklik gerekmez.
@@ -84,15 +84,11 @@ cp .env.example .env.local
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...buraya-anon-key
-AUTH_SECRET=buraya-uzun-rastgele-bir-yazi
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-`AUTH_SECRET` için terminalde rastgele bir değer üretebilirsin:
-
-```bash
-openssl rand -hex 32
-```
+> Anahtarlar `NEXT_PUBLIC_` olduğu için tarayıcıya gider. Bu normaldir: anon/publishable
+> anahtarı herkese açık olacak şekilde tasarlanmıştır. Güvenliği RLS sağlar.
 
 ---
 
@@ -138,10 +134,9 @@ başlatıldı mı kontrol et. (Ortam değişkenleri sadece başlangıçta okunur
 
 ## Demo verilerini sıfırlama
 
-Supabase olmadan deneme yaptıysan oluşan hesaplar `.data/demo-users.json` içindedir:
+Supabase olmadan deneme yaptıysan hesaplar tarayıcının `localStorage` alanındadır.
+Tarayıcı konsolunda şunu çalıştırıp sayfayı yenile:
 
-```bash
-rm -rf .data
+```js
+localStorage.clear()
 ```
-
-Sunucuyu yeniden başlat; demo hesapları temizlenir. `.data/` git'e dahil değildir.

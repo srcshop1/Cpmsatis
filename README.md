@@ -17,8 +17,8 @@ panel vitrini hazır: Supabase Auth + Postgres, açık oturumlar, kullanıcı ad
 
 - Next.js 15 (App Router, Server Actions) + React 19 + TypeScript
 - Tailwind CSS v4
-- Supabase (`@supabase/ssr`, `@supabase/supabase-js`)
-- Yerel demo modu için `node:crypto` + dosya tabanlı depo
+- Supabase (`@supabase/supabase-js`) — istemci tarayıcıda, yetki RLS ile
+- Demo modu: anahtar yoksa hesaplar tarayıcıda (localStorage) tutulur
 
 ## Hızlı başlangıç
 
@@ -28,7 +28,7 @@ cp .env.example .env.local   # Supabase anahtarlarını gir (opsiyonel)
 npm run dev                  # http://localhost:3000
 ```
 
-Anahtar girmezsen site **demo modunda** açılır; hesaplar `.data/` içinde saklanır.
+Anahtar girmezsen site **demo modunda** açılır; hesaplar tarayıcıda saklanır.
 
 Supabase kurulumu: **[SUPABASE-KURULUM.md](./SUPABASE-KURULUM.md)**
 Veritabanı betiği: **[supabase/schema.sql](./supabase/schema.sql)**
@@ -49,13 +49,12 @@ app/
   kayit/page.tsx        # Kayıt ol
   giris/page.tsx        # Giriş yap
   panel/page.tsx        # Oturum sonrası panel
-  actions/auth.ts       # Sunucu action'ları (kayıt, giriş, çıkış)
 components/
-  auth/                 # Formlar + auth yerleşimi
+  auth/                 # Formlar, AuthProvider, auth yerleşimi
   site-header.tsx       # Üst menü
   listing-card.tsx      # İlan kartı
 lib/
-  auth/                 # Oturum, mod seçimi, demo deposu
+  auth/                 # Tipler + tarayıcı demo deposu
   supabase/             # Supabase istemcileri
   validation.ts         # Form doğrulama kuralları
   catalog.ts            # Kategoriler + örnek ilanlar
@@ -72,7 +71,8 @@ supabase/schema.sql     # Tablolar, trigger, RLS, RPC
 
 ## Güvenlik notları
 
-- Yalnızca **anon** anahtarı kullanılır; yetki kontrolü Supabase RLS ile yapılır.
+- Yalnızca **anon/publishable** anahtar kullanılır; yetki kontrolü Supabase RLS ile yapılır.
+- Oturum tarayıcıda tutulur; sunucuya şifre/anahtar gitmez.
 - `email_for_username` fonksiyonu kullanıcı adından e-posta çözer (kullanıcı adıyla giriş için
   gerekli). Kullanıcı adı gizliliği kritikse e-posta ile girişi zorunlu tut.
 - Demo modu yalnızca geliştirme içindir; üretimde Supabase anahtarlarını kullan.

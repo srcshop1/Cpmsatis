@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { ListingCard } from "@/components/listing-card";
+import { CtaBand } from "@/components/home/cta-band";
 import {
   ArrowRightIcon,
   BoltIcon,
@@ -12,11 +13,9 @@ import {
   SparkIcon,
   UserIcon,
 } from "@/components/icons";
-import { getSessionUser } from "@/lib/auth";
 import { categories, demoListings, formatPrice } from "@/lib/catalog";
 
 export default async function HomePage() {
-  const user = await getSessionUser();
   const featured = demoListings.slice(0, 4);
 
   return (
@@ -24,7 +23,7 @@ export default async function HomePage() {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[560px] grid-lines opacity-80" />
 
       <div className="relative">
-        <SiteHeader user={user} />
+        <SiteHeader />
 
         <main>
           {/* HERO */}
@@ -289,35 +288,7 @@ export default async function HomePage() {
 
           {/* CTA */}
           <section className="mx-auto w-full max-w-6xl px-4 py-10 pb-16">
-            <div className="relative overflow-hidden rounded-[1.5rem] border border-accent/25 bg-gradient-to-br from-accent/16 via-surface-2 to-surface p-7 text-center sm:p-10">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_100%_at_50%_0%,rgba(255,138,31,0.18),transparent_70%)]" />
-              <div className="relative">
-                <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
-                  {user ? "Her şey hazır, hadi keşfet." : "Hesabın yok mu? 30 saniyede aç."}
-                </h2>
-                <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-                  {user
-                    ? "Panelinde arama, kategoriler ve siparişlerin seni bekliyor."
-                    : "Kayıt olmak ücretsiz. İlanları gör, güvenle alışverişe başla."}
-                </p>
-                <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
-                  {user ? (
-                    <Link href="/panel" className="btn btn-primary h-11 px-6">
-                      Panelime git <ArrowRightIcon width={16} height={16} />
-                    </Link>
-                  ) : (
-                    <>
-                      <Link href="/kayit" className="btn btn-primary h-11 px-6">
-                        Ücretsiz Kayıt Ol
-                      </Link>
-                      <Link href="/giris" className="btn btn-ghost h-11 px-6">
-                        Giriş Yap
-                      </Link>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+            <CtaBand />
           </section>
         </main>
 

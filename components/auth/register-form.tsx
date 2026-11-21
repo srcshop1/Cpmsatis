@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
-import { registerAction } from "@/app/actions/auth";
+import { useRouter } from "next/navigation";
+import { useState, type FormEvent } from "react";
+import { useAuth } from "@/components/auth/auth-provider";
 import { CheckIcon, LockIcon, MailIcon, UserIcon } from "@/components/icons";
-import { initialAuthState } from "@/lib/auth/types";
+import { Spinner } from "@/components/ui/spinner";
 import {
   MAX_USERNAME_LENGTH,
   MIN_PASSWORD_LENGTH,
@@ -14,23 +15,25 @@ import {
   validatePasswordConfirm,
   validateUsername,
 } from "@/lib/validation";
-import { Spinner } from "@/components/ui/spinner";
 import { TextField } from "./text-field";
 
 type FieldName = "username" | "email" | "password" | "passwordConfirm";
 
 export function RegisterForm({ nextPath }: { nextPath?: string }) {
-  const [state, formAction, pending] = useActionState(registerAction, initialAuthState);
+  const router = useRouter();
+  const { signUp } = useAuth();
 
   const [values, setValues] = useState<Record<FieldName, string>>({
-    username: state.values?.username ?? "",
-    email: state.values?.email ?? "",
+    username: "",
+    email: "",
     password: "",
     passwordConfirm: "",
   });
   const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>({});
-  const [editedAfterSubmit, setEditedAfterSubmit] = useState<Partial<Record<FieldName, boolean>>>({});
   const [showPassword, setShowPassword] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string>>({});
 
   const localErrors: Record<FieldName, string | null> = {
     username: validateUsername(values.username),
@@ -40,34 +43,55 @@ export function RegisterForm({ nextPath }: { nextPath?: string }) {
   };
 
   function errorFor(field: FieldName) {
-    if (touched[field]) return localErrors[field];
-    if (state.status === "error" && !editedAfterSubmit[field]) {
-      return localErrors[field] ?? state.errors?.[field] ?? null;
+    if (touched[field] || serverFieldErrors[field]) {
+      return localErrors[field] ?? serverFieldErrors[field] ?? null;
     }
     return null;
   }
 
   function update(field: FieldName, value: string) {
     setValues((prev) => ({ ...prev, [field]: value }));
-    setEditedAfterSubmit((prev) => ({ ...prev, [field]: true }));
     setTouched((prev) => ({ ...prev, [field]: true }));
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setTouched({ username: true, email: true, password: true, passwordConfirm: true });
+    if (Object.values(localErrors).some(Boolean)) return;
+
+    setPending(true);
+    setServerError(null);
+    setServerFieldErrors({});
+
+    const result = await signUp({
+      username: values.username,
+      email: values.email,
+      password: values.password,
+    });
+    setPending(false);
+
+    if (!result.ok) {
+      setServerError(result.message);
+      setServerFieldErrors(result.fieldErrors ?? {});
+      return;
+    }
+
+    router.replace(nextPath ?? "/panel?hosgeldin=1");
+    router.refresh();
   }
 
   const passwordLongEnough = values.password.length >= MIN_PASSWORD_LENGTH;
   const passwordsMatch =
     values.passwordConfirm.length > 0 && values.password === values.passwordConfirm;
-  const showServerMessage = state.status === "error" && state.message;
 
   return (
-    <form action={formAction} className="space-y-4" noValidate>
-      {nextPath && <input type="hidden" name="next" value={nextPath} />}
-
-      {showServerMessage && (
+    <form onSubmit={onSubmit} className="space-y-4" noValidate>
+      {serverError && (
         <div
           role="alert"
           className="animate-pop rounded-xl border border-danger/35 bg-danger/10 px-4 py-3 text-sm text-[#ffb3bb]"
         >
-          {state.message}
+          {serverError}
         </div>
       )}
 
@@ -145,7 +169,11 @@ export function RegisterForm({ nextPath }: { nextPath?: string }) {
         }
       />
 
-      <button type="submit" className="btn btn-primary mt-2 h-12 w-full text-[0.98rem]" disabled={pending}>
+      <button
+        type="submit"
+        className="btn btn-primary mt-2 h-12 w-full text-[0.98rem]"
+        disabled={pending}
+      >
         {pending ? (
           <>
             <Spinner /> Kayıt olunuyor…
@@ -156,8 +184,7 @@ export function RegisterForm({ nextPath }: { nextPath?: string }) {
       </button>
 
       <p className="pt-1 text-center text-xs leading-relaxed text-muted-2">
-        Kayıt olarak{" "}
-        <span className="text-muted">Kullanım Koşulları</span> ve{" "}
+        Kayıt olarak <span className="text-muted">Kullanım Koşulları</span> ve{" "}
         <span className="text-muted">Gizlilik Politikası</span>&apos;nı kabul etmiş olursun.
       </p>
 

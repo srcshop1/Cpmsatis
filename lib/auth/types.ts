@@ -1,19 +1,13 @@
-export type SessionUser = {
+export type AppUser = {
   id: string;
   username: string;
   email: string;
+  avatarUrl?: string | null;
+  rating?: number | null;
+  salesCount?: number | null;
   createdAt?: string;
 };
 
-export type AuthState = {
-  status: "idle" | "error";
-  message?: string;
-  errors?: Record<string, string>;
-  values?: {
-    username?: string;
-    email?: string;
-    identifier?: string;
-  };
-};
-
-export const initialAuthState: AuthState = { status: "idle" };
+export type AuthResult =
+  | { ok: true }
+  | { ok: false; message: string; fieldErrors?: Record<string, string> };
