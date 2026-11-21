@@ -160,7 +160,7 @@ export default function NotificationsPage() {
               type="button"
               onClick={stopSelect}
               aria-label="Seçimi bırak"
-              className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-white/4 text-muted transition hover:text-ink"
+              className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-white/4 text-muted transition hover:text-text"
             >
               <XIcon width={15} height={15} />
             </button>

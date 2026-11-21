@@ -919,7 +919,7 @@ export default function AdminPage() {
                 </p>
                 {ticket.admin_note && (
                   <p className="mt-2 whitespace-pre-wrap rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.72rem] leading-relaxed text-muted-2">
-                    <span className="font-semibold text-ink/80">Yetkili mesajı: </span>
+                    <span className="font-semibold text-text">Yetkili mesajı: </span>
                     {ticket.admin_note}
                   </p>
                 )}
@@ -985,7 +985,7 @@ export default function AdminPage() {
                 </div>
                 {application.note && (
                   <p className="mt-2 whitespace-pre-wrap rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.72rem] leading-relaxed text-muted-2">
-                    <span className="font-semibold text-ink/80">Yetkili notu: </span>
+                    <span className="font-semibold text-text">Yetkili notu: </span>
                     {application.note}
                   </p>
                 )}

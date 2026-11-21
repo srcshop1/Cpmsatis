@@ -71,7 +71,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
               size={22}
               rounded="rounded-md"
             />
-            <span className="min-w-0 flex-1 truncate text-[0.74rem] font-semibold text-ink">
+            <span className="min-w-0 flex-1 truncate text-[0.74rem] font-semibold text-text">
               @{seller?.username ?? "satıcı"}
             </span>
             {seller?.verified_seller && <VerifiedTick size={12} />}
