@@ -16,6 +16,7 @@ import {
 } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ReasonDialog } from "@/components/admin/reason-dialog";
 import { MemberDetail } from "@/components/admin/member-detail";
 import { frames as frameList } from "@/lib/frames";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -32,11 +33,21 @@ type Tab =
   | "members"
   | "usersDetails"
   | "frames"
+  | "notify"
   | "sales"
   | "tags"
   | "roles"
   | "announce"
   | "stats";
+
+const STATUS_LABELS: Record<string, string> = {
+  open: "Açık",
+  reviewing: "İnceleniyor",
+  closed: "Kapandı",
+  pending: "Bekliyor",
+  approved: "Onaylandı",
+  rejected: "Reddedildi",
+};
 
 const TABS: { key: Tab; label: string; ownerOnly?: boolean }[] = [
   { key: "tickets", label: "Destek" },
@@ -47,6 +58,7 @@ const TABS: { key: Tab; label: string; ownerOnly?: boolean }[] = [
   { key: "members", label: "Üyeler" },
   { key: "usersDetails", label: "Kullanıcı Verileri" },
   { key: "frames", label: "Çerçeve Ver" },
+  { key: "notify", label: "Bildirim Gönder" },
   { key: "sales", label: "Satışlar" },
   { key: "tags", label: "Tag Ver" },
   { key: "roles", label: "Moderatör", ownerOnly: true },
@@ -60,6 +72,7 @@ type Ticket = {
   title: string;
   description: string;
   status: string;
+  admin_note: string | null;
   created_at: string;
 };
 
@@ -67,6 +80,7 @@ type Application = {
   id: string;
   user_id: string;
   status: string;
+  note: string | null;
   created_at: string;
 };
 
@@ -156,6 +170,20 @@ export default function AdminPage() {
     created_at: string;
   } | null>(null);
   const [confirmAnnouncement, setConfirmAnnouncement] = useState(false);
+  const [closeTicketTarget, setCloseTicketTarget] = useState<Ticket | null>(null);
+  const [closeApplicationTarget, setCloseApplicationTarget] = useState<Application | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    kind: "ticket" | "application";
+    id: string;
+    label: string;
+  } | null>(null);
+  const [notifyQuery, setNotifyQuery] = useState("");
+  const [notifyTitle, setNotifyTitle] = useState("");
+  const [notifyBody, setNotifyBody] = useState("");
+  const [notifyTarget, setNotifyTarget] = useState<{ id: string; username: string } | null>(null);
+  const [featureQuery, setFeatureQuery] = useState("");
+  const [featureDays, setFeatureDays] = useState("3");
+  const [featurePick, setFeaturePick] = useState<ListingRow | null>(null);
   const [stats, setStats] = useState<Record<string, number>>({});
 
   const loadProfiles = useCallback(
@@ -186,7 +214,7 @@ export default function AdminPage() {
     if (tab === "tickets") {
       const { data } = await supabase
         .from("support_tickets")
-        .select("id, user_id, title, description, status, created_at")
+        .select("id, user_id, title, description, status, admin_note, created_at")
         .order("created_at", { ascending: false })
         .limit(50);
       const rows = (data ?? []) as Ticket[];
@@ -197,7 +225,7 @@ export default function AdminPage() {
     if (tab === "applications") {
       const { data } = await supabase
         .from("seller_applications")
-        .select("id, user_id, status, created_at")
+        .select("id, user_id, status, note, created_at")
         .order("created_at", { ascending: false })
         .limit(50);
       const rows = (data ?? []) as Application[];
@@ -229,7 +257,7 @@ export default function AdminPage() {
       );
     }
 
-    if (tab === "listings") {
+    if (tab === "listings" || tab === "featured") {
       let { data, error } = await supabase
         .from("listings")
         .select("id, title, price, status, featured_until, categories, seller_id, created_at")
@@ -313,21 +341,108 @@ export default function AdminPage() {
     if (role) void loadTab();
   }, [role, loadTab]);
 
-  async function updateTicket(id: string, status: string) {
+  /** Kişinin bildirim kutusuna site içi bildirim bırakır */
+  async function sendNotification(
+    userId: string,
+    title: string,
+    body: string,
+    link: string | null = null,
+    kind = "staff",
+  ) {
+    if (!supabase) return false;
+    const { error } = await supabase.rpc("admin_notify", {
+      p_user: userId,
+      p_title: title,
+      p_body: body,
+      p_link: link,
+      p_kind: kind,
+    });
+    if (!error) return true;
+
+    const fallback = await supabase
+      .from("notifications")
+      .insert({ user_id: userId, kind, title, body, link });
+    return !fallback.error;
+  }
+
+  async function reviewTicket(ticket: Ticket) {
     if (!supabase) return;
-    setBusy(id);
-    await supabase.from("support_tickets").update({ status }).eq("id", id);
+    setBusy(ticket.id);
+    setNotice(null);
+    const { error } = await supabase
+      .from("support_tickets")
+      .update({ status: "reviewing" })
+      .eq("id", ticket.id);
+    let message = error ? "Durum güncellenemedi." : "Talep incelemeye alındı.";
+    if (!error) {
+      await sendNotification(
+        ticket.user_id,
+        "Talebiniz İnceleniyor",
+        "Destek talebiniz yetkili tarafından incelemeye alındı. Sonuç bildirilecek.",
+        "/diger/destek",
+      );
+      message = "Talep incelemeye alındı, kişiye bildirim gönderildi.";
+    }
     setBusy(null);
+    setNotice(message);
     await loadTab();
   }
 
-  async function decideApplication(application: Application, approve: boolean) {
+  async function closeTicket(ticket: Ticket, note: string) {
+    if (!supabase) return;
+    setBusy(ticket.id);
+    setNotice(null);
+    const { error } = await supabase
+      .from("support_tickets")
+      .update({ status: "closed", admin_note: note || null })
+      .eq("id", ticket.id);
+    if (error) {
+      setBusy(null);
+      setNotice("Talep kapatılamadı. Lütfen tekrar dene.");
+      return;
+    }
+    const notified = await sendNotification(
+      ticket.user_id,
+      "Talebiniz Kapatıldı; İşte Sonuçlar",
+      note ? `Yetkili Mesajı:\n${note}` : "Yetkili Mesajı:\nTalebiniz incelendi ve kapatıldı.",
+      "/diger/destek",
+      "support",
+    );
+    setBusy(null);
+    setCloseTicketTarget(null);
+    setNotice(notified ? "Talep kapatıldı, kişiye bildirim gönderildi." : "Talep kapatıldı.");
+    await loadTab();
+  }
+
+  async function reviewApplication(application: Application) {
     if (!supabase) return;
     setBusy(application.id);
-    await supabase
+    setNotice(null);
+    await sendNotification(
+      application.user_id,
+      "Başvurunuz İnceleniyor",
+      "Onaylı satıcı başvurunuz yetkili tarafından incelemeye alındı. Sonuç bildirilecek.",
+      "/diger/onayli-satici",
+      "application",
+    );
+    setBusy(null);
+    setNotice("Kişiye \"başvurunuz inceleniyor\" bildirimi gönderildi.");
+  }
+
+  async function closeApplication(application: Application, approve: boolean, note: string) {
+    if (!supabase) return;
+    setBusy(application.id);
+    setNotice(null);
+    const { error } = await supabase
       .from("seller_applications")
-      .update({ status: approve ? "approved" : "rejected" })
+      .update({ status: approve ? "approved" : "rejected", note: note || null })
       .eq("id", application.id);
+
+    if (error) {
+      setBusy(null);
+      setNotice("Başvuru sonuçlandırılamadı. Lütfen tekrar dene.");
+      return;
+    }
 
     if (approve) {
       await supabase.rpc("admin_set_tag", {
@@ -337,8 +452,82 @@ export default function AdminPage() {
       });
     }
 
+    const notified = await sendNotification(
+      application.user_id,
+      `Başvurunuz Sonuçlandı; ${approve ? "Kabul Edildiniz" : "Reddedildiniz"}`,
+      note
+        ? `Yetkili Notu:\n${note}`
+        : `Yetkili Notu:\nBaşvurunuz ${approve ? "kabul edildi" : "reddedildi"}.`,
+      "/diger/onayli-satici",
+      "application",
+    );
+
     setBusy(null);
-    setNotice(approve ? "Başvuru onaylandı, Onaylı Satıcı tag'i verildi." : "Başvuru reddedildi.");
+    setCloseApplicationTarget(null);
+    setNotice(
+      approve
+        ? `Başvuru onaylandı, Onaylı Satıcı tag'i verildi.${notified ? " Kişiye bildirim gönderildi." : ""}`
+        : `Başvuru reddedildi.${notified ? " Kişiye bildirim gönderildi." : ""}`,
+    );
+    await loadTab();
+  }
+
+  async function removeTicketOrApplication() {
+    if (!supabase || !deleteTarget) return;
+    setBusy(deleteTarget.id);
+    setNotice(null);
+    const table = deleteTarget.kind === "ticket" ? "support_tickets" : "seller_applications";
+    const { error } = await supabase.from(table).delete().eq("id", deleteTarget.id);
+    setBusy(null);
+    setDeleteTarget(null);
+    setNotice(error ? "Kayıt silinemedi. Lütfen tekrar dene." : "Kayıt silindi.");
+    await loadTab();
+  }
+
+  async function sendManualNotification() {
+    if (!supabase) return;
+    setNotice(null);
+    const profile = await findProfile(notifyQuery);
+    if (!profile) {
+      setNotice("Kullanıcı bulunamadı. Kullanıcı adı veya e-posta ile ara.");
+      return;
+    }
+    const title = notifyTitle.trim();
+    const body = notifyBody.trim();
+    if (title.length < 2) {
+      setNotice("Bildirim başlığı yaz.");
+      return;
+    }
+    setBusy("notify");
+    const ok = await sendNotification(profile.id, title, body, null, "staff");
+    setBusy(null);
+    if (!ok) {
+      setNotice("Bildirim gönderilemedi. Lütfen tekrar dene.");
+      return;
+    }
+    setNotifyTarget({ id: profile.id, username: profile.username });
+    setNotifyTitle("");
+    setNotifyBody("");
+    setNotice(`Bildirim gönderildi: @${profile.username}`);
+  }
+
+  async function featureListingNow() {
+    if (!supabase || !featurePick) return;
+    const days = Math.max(1, Math.min(30, Number(featureDays) || 0));
+    setBusy("feature");
+    setNotice(null);
+    const { error } = await supabase.rpc("admin_feature_listing", {
+      p_listing: featurePick.id,
+      p_days: days,
+    });
+    setBusy(null);
+    if (error) {
+      setNotice("İlan öne çıkarılamadı. Lütfen tekrar dene.");
+      return;
+    }
+    setNotice(`Öne çıkarıldı: ${featurePick.title} · ${days} gün`);
+    setFeaturePick(null);
+    setFeatureQuery("");
     await loadTab();
   }
 
@@ -722,28 +911,52 @@ export default function AdminPage() {
                     </p>
                   </div>
                   <span className="badge shrink-0 border border-line bg-white/4 text-[0.6rem] text-muted">
-                    {ticket.status}
+                    {STATUS_LABELS[ticket.status] ?? ticket.status}
                   </span>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-[0.78rem] leading-relaxed text-muted">
                   {ticket.description}
                 </p>
-                <div className="mt-3 flex gap-2">
+                {ticket.admin_note && (
+                  <p className="mt-2 whitespace-pre-wrap rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.72rem] leading-relaxed text-muted-2">
+                    <span className="font-semibold text-ink/80">Yetkili mesajı: </span>
+                    {ticket.admin_note}
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {ticket.status !== "closed" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => reviewTicket(ticket)}
+                        disabled={busy === ticket.id || ticket.status === "reviewing"}
+                        className="btn btn-ghost h-8 px-3 text-[0.7rem]"
+                      >
+                        {busy === ticket.id ? <Spinner /> : "İnceleniyor"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCloseTicketTarget(ticket)}
+                        disabled={busy === ticket.id}
+                        className="btn btn-primary h-8 px-3 text-[0.7rem]"
+                      >
+                        Kapat
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
-                    onClick={() => updateTicket(ticket.id, "reviewing")}
+                    onClick={() =>
+                      setDeleteTarget({
+                        kind: "ticket",
+                        id: ticket.id,
+                        label: `@${profiles[ticket.user_id]?.username ?? "kullanıcı"} · ${ticket.title}`,
+                      })
+                    }
                     disabled={busy === ticket.id}
-                    className="btn btn-ghost h-8 px-3 text-[0.7rem]"
+                    className="btn btn-ghost h-8 px-3 text-[0.7rem] text-danger"
                   >
-                    İnceleniyor
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateTicket(ticket.id, "closed")}
-                    disabled={busy === ticket.id}
-                    className="btn btn-primary h-8 px-3 text-[0.7rem]"
-                  >
-                    {busy === ticket.id ? <Spinner /> : "Kapat"}
+                    <XIcon width={12} height={12} /> Sil
                   </button>
                 </div>
               </div>
@@ -755,40 +968,63 @@ export default function AdminPage() {
           <>
             {applications.length === 0 && <Empty text="Bekleyen başvuru yok." />}
             {applications.map((application) => (
-              <div key={application.id} className="card flex flex-wrap items-center gap-3 p-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">
-                    @{profiles[application.user_id]?.username ?? "kullanıcı"}
-                  </p>
-                  <p className="text-[0.68rem] text-muted-2">
-                    {profiles[application.user_id]?.sales_count ?? 0} başarılı işlem ·{" "}
-                    {application.status}
-                  </p>
-                </div>
-                {application.status === "pending" ? (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => decideApplication(application, false)}
-                      disabled={busy === application.id}
-                      className="btn btn-ghost h-8 px-3 text-[0.7rem]"
-                    >
-                      <XIcon width={12} height={12} /> Reddet
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => decideApplication(application, true)}
-                      disabled={busy === application.id}
-                      className="btn btn-primary h-8 px-3 text-[0.7rem]"
-                    >
-                      {busy === application.id ? <Spinner /> : <><CheckIcon width={12} height={12} /> Onayla</>}
-                    </button>
+              <div key={application.id} className="card p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">
+                      @{profiles[application.user_id]?.username ?? "kullanıcı"}
+                    </p>
+                    <p className="mt-0.5 text-[0.68rem] text-muted-2">
+                      {profiles[application.user_id]?.sales_count ?? 0} başarılı işlem ·{" "}
+                      {new Date(application.created_at).toLocaleString("tr-TR")}
+                    </p>
                   </div>
-                ) : (
-                  <span className="badge border border-line bg-white/4 text-[0.6rem] text-muted">
-                    {application.status}
+                  <span className="badge shrink-0 border border-line bg-white/4 text-[0.6rem] text-muted">
+                    {STATUS_LABELS[application.status] ?? application.status}
                   </span>
+                </div>
+                {application.note && (
+                  <p className="mt-2 whitespace-pre-wrap rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.72rem] leading-relaxed text-muted-2">
+                    <span className="font-semibold text-ink/80">Yetkili notu: </span>
+                    {application.note}
+                  </p>
                 )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {application.status === "pending" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => reviewApplication(application)}
+                        disabled={busy === application.id}
+                        className="btn btn-ghost h-8 px-3 text-[0.7rem]"
+                      >
+                        {busy === application.id ? <Spinner /> : "İncelemeye Al"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCloseApplicationTarget(application)}
+                        disabled={busy === application.id}
+                        className="btn btn-primary h-8 px-3 text-[0.7rem]"
+                      >
+                        <CheckIcon width={12} height={12} /> Kapat
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDeleteTarget({
+                        kind: "application",
+                        id: application.id,
+                        label: `@${profiles[application.user_id]?.username ?? "kullanıcı"} · Onaylı satıcı başvurusu`,
+                      })
+                    }
+                    disabled={busy === application.id}
+                    className="btn btn-ghost h-8 px-3 text-[0.7rem] text-danger"
+                  >
+                    <XIcon width={12} height={12} /> Sil
+                  </button>
+                </div>
               </div>
             ))}
           </>
@@ -796,6 +1032,115 @@ export default function AdminPage() {
 
         {tab === "featured" && (
           <>
+            <div className="card p-4">
+              <h2 className="text-sm font-bold">İlanı öne çıkar</h2>
+              <p className="mt-1 text-[0.7rem] text-muted-2">
+                İlan başlığı veya satıcı adıyla ara, ilanı seç, süreyi yaz. Talep beklemeden
+                doğrudan öne çıkarılır.
+              </p>
+              <input
+                className="field mt-3"
+                value={featureQuery}
+                onChange={(event) => {
+                  setFeatureQuery(event.target.value);
+                  setFeaturePick(null);
+                }}
+                placeholder="ilan başlığı veya @satıcı"
+              />
+              <div className="mt-2 max-h-52 space-y-1.5 overflow-y-auto">
+                {listings
+                  .filter((listing) => {
+                    const needle = featureQuery.trim().toLocaleLowerCase("tr");
+                    if (!needle) return false;
+                    return (
+                      listing.title.toLocaleLowerCase("tr").includes(needle) ||
+                      (profiles[listing.seller_id]?.username ?? "")
+                        .toLocaleLowerCase("tr")
+                        .includes(needle.replace("@", ""))
+                    );
+                  })
+                  .slice(0, 12)
+                  .map((listing) => (
+                    <button
+                      key={listing.id}
+                      type="button"
+                      onClick={() => setFeaturePick(listing)}
+                      className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition ${
+                        featurePick?.id === listing.id
+                          ? "border-accent/60 bg-accent/15"
+                          : "border-line bg-white/4 hover:border-line-soft"
+                      }`}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[0.78rem] font-semibold">
+                          {listing.title}
+                        </span>
+                        <span className="block truncate text-[0.66rem] text-muted-2">
+                          @{profiles[listing.seller_id]?.username ?? "satıcı"} ·{" "}
+                          {formatPrice(listing.price)}
+                          {listing.featured_until
+                            ? ` · öne çıkan: ${new Date(listing.featured_until).toLocaleDateString("tr-TR")}`
+                            : ""}
+                        </span>
+                      </span>
+                      {featurePick?.id === listing.id && (
+                        <CheckIcon width={14} height={14} className="shrink-0 text-accent" />
+                      )}
+                    </button>
+                  ))}
+                {featureQuery.trim().length > 0 &&
+                  listings.filter((listing) => {
+                    const needle = featureQuery.trim().toLocaleLowerCase("tr");
+                    return (
+                      listing.title.toLocaleLowerCase("tr").includes(needle) ||
+                      (profiles[listing.seller_id]?.username ?? "")
+                        .toLocaleLowerCase("tr")
+                        .includes(needle.replace("@", ""))
+                    );
+                  }).length === 0 && (
+                    <p className="px-1 py-2 text-[0.72rem] text-muted-2">İlan bulunamadı.</p>
+                  )}
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {["1", "3", "7", "15", "30"].map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => setFeatureDays(day)}
+                    className={`chip ${featureDays === day ? "chip-active" : ""}`}
+                  >
+                    {day} gün
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  className="field h-10 w-24 text-center text-sm"
+                  value={featureDays}
+                  onChange={(event) => setFeatureDays(event.target.value.replace(/[^0-9]/g, ""))}
+                  inputMode="numeric"
+                  placeholder="gün"
+                />
+                <span className="text-[0.72rem] text-muted-2">gün (1–30)</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={featureListingNow}
+                disabled={!featurePick || busy === "feature"}
+                className="btn btn-primary mt-3 h-10 w-full text-sm"
+              >
+                {busy === "feature" ? <Spinner /> : <><StarIcon width={13} height={13} /> Seçili ilanı öne çıkar</>}
+              </button>
+              {featurePick && (
+                <p className="mt-2 truncate text-[0.7rem] text-accent">Seçili: {featurePick.title}</p>
+              )}
+            </div>
+
+            <h2 className="pt-1 text-[0.72rem] font-bold uppercase tracking-wide text-muted-2">
+              Gelen talepler
+            </h2>
             {featured.length === 0 && <Empty text="Öne çıkarma talebi yok." />}
             {featured.map((request) => (
               <div key={request.id} className="card flex flex-wrap items-center gap-3 p-4">
@@ -1201,6 +1546,51 @@ export default function AdminPage() {
           </div>
         )}
 
+        {tab === "notify" && (
+          <div className="card p-4">
+            <h2 className="text-sm font-bold">Bildirim Gönder</h2>
+            <p className="mt-1 text-[0.7rem] text-muted-2">
+              Kullanıcı adı veya e-posta yaz, başlık ve mesajı gir. Bildirim kişinin bildirim
+              kutusuna düşer.
+            </p>
+            <input
+              className="field mt-3"
+              value={notifyQuery}
+              onChange={(event) => setNotifyQuery(event.target.value)}
+              placeholder="kullanıcı adı veya e-posta"
+            />
+            <input
+              className="field mt-2"
+              value={notifyTitle}
+              onChange={(event) => setNotifyTitle(event.target.value)}
+              maxLength={120}
+              placeholder="Bildirim başlığı"
+            />
+            <textarea
+              className="field mt-2 resize-none text-[0.8rem] leading-relaxed"
+              value={notifyBody}
+              onChange={(event) => setNotifyBody(event.target.value)}
+              rows={5}
+              maxLength={500}
+              placeholder="Bildirim mesajı (istersen boş bırak)"
+            />
+            <p className="mt-1 text-right text-[0.62rem] text-muted-2">{notifyBody.length}/500</p>
+            <button
+              type="button"
+              onClick={sendManualNotification}
+              disabled={busy === "notify"}
+              className="btn btn-primary mt-2 h-10 w-full text-sm"
+            >
+              {busy === "notify" ? <Spinner /> : <><BellIcon width={14} height={14} /> Bildirim Gönder</>}
+            </button>
+            {notifyTarget && (
+              <p className="mt-2 text-[0.7rem] text-accent">
+                Son gönderilen: @{notifyTarget.username}
+              </p>
+            )}
+          </div>
+        )}
+
         {tab === "tags" && (
           <div className="card p-4">
             <h2 className="text-sm font-bold">Tag Ver / Al</h2>
@@ -1354,6 +1744,60 @@ export default function AdminPage() {
       {detailUser && (
         <MemberDetail userId={detailUser} onClose={() => setDetailUser(null)} />
       )}
+
+      <ReasonDialog
+        open={Boolean(closeTicketTarget)}
+        title="Talebi kapat"
+        description={
+          closeTicketTarget
+            ? `@${profiles[closeTicketTarget.user_id]?.username ?? "kullanıcı"} kişisine "Talebiniz Kapatıldı; İşte Sonuçlar" bildirimi gidecek.`
+            : undefined
+        }
+        confirmLabel="Kapat ve Gönder"
+        required
+        busy={Boolean(closeTicketTarget && busy === closeTicketTarget.id)}
+        onSubmit={({ note }) => {
+          const target = closeTicketTarget;
+          if (target) void closeTicket(target, note);
+        }}
+        onCancel={() => setCloseTicketTarget(null)}
+      />
+
+      <ReasonDialog
+        open={Boolean(closeApplicationTarget)}
+        title="Başvuruyu sonuçlandır"
+        description={
+          closeApplicationTarget
+            ? `@${profiles[closeApplicationTarget.user_id]?.username ?? "kullanıcı"} kişisine sonuç bildirimi gidecek.`
+            : undefined
+        }
+        options={[
+          { key: "approved", label: "Geçti" },
+          { key: "rejected", label: "Kaldı" },
+        ]}
+        confirmLabel="Sonuçlandır ve Gönder"
+        busy={Boolean(closeApplicationTarget && busy === closeApplicationTarget.id)}
+        onSubmit={({ note, choice }) => {
+          const target = closeApplicationTarget;
+          if (target) void closeApplication(target, choice === "approved", note);
+        }}
+        onCancel={() => setCloseApplicationTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Kayıt silinsin mi?"
+        description={
+          deleteTarget
+            ? `${deleteTarget.label} kalıcı olarak silinecek. Bu işlem geri alınamaz.`
+            : undefined
+        }
+        confirmLabel="Sil"
+        danger
+        busy={Boolean(deleteTarget && busy === deleteTarget.id)}
+        onConfirm={() => void removeTicketOrApplication()}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
       <ConfirmDialog
         open={confirmAnnouncement}

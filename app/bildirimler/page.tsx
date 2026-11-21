@@ -112,7 +112,7 @@ export default function NotificationsPage() {
                     </span>
                   </span>
                   {item.body && (
-                    <span className="mt-0.5 block line-clamp-2 text-[0.75rem] leading-relaxed text-muted-2">
+                    <span className="mt-0.5 block whitespace-pre-line break-words text-[0.75rem] leading-relaxed text-muted-2">
                       {item.body}
                     </span>
                   )}
