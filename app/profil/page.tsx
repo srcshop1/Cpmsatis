@@ -135,15 +135,12 @@ export default function ProfilePage() {
         .eq("id", user.id);
 
       if (updateError) {
-        throw new Error(`Profil kaydedilemedi: ${updateError.message}`);
+        console.error("[profil]", updateError.message);
+        throw new Error("Profil kaydedilemedi. Lütfen tekrar dene.");
       }
 
       await refreshUser();
-      setNotice(
-        usedFallback
-          ? "Profil fotoğrafın kaydedildi. (Depo kurulmadığı için profil içinde saklandı — schema-v4.sql çalıştırınca depoya taşınır.)"
-          : "Profil fotoğrafın güncellendi.",
-      );
+      setNotice("Profil fotoğrafın güncellendi.");
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "Fotoğraf yüklenemedi, tekrar dene.",

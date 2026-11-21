@@ -26,7 +26,8 @@ import {
   renewListing,
   type ListingSeller,
 } from "@/lib/listings";
-import { FramedAvatar, StaffBadge, VerifiedBadge, VerifiedTick } from "@/components/user-badge";
+import { FramedAvatar, StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
 import {
@@ -81,13 +82,15 @@ export function ListingDetailClient() {
   const [sellOpen, setSellOpen] = useState(false);
   const [buyers, setBuyers] = useState<{ id: string; username: string }[]>([]);
   const [sellDone, setSellDone] = useState(false);
+  const [sellerTags, setSellerTags] = useState<string[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isOwner = Boolean(user && listing && user.id === listing.seller_id);
 
   useEffect(() => {
     if (!supabase || !listingId) {
       setState("error");
-      setError("Supabase bağlantısı yok.");
+      setError("İlan şu an yüklenemedi. Sayfayı yenileyip tekrar dene.");
       return;
     }
     let cancelled = false;
@@ -123,8 +126,9 @@ export function ListingDetailClient() {
 
       if (cancelled) return;
       if (queryError) {
+        console.error("[ilan]", queryError.message);
         setState("error");
-        setError(queryError.message);
+        setError("İlan şu an yüklenemedi. Sayfayı yenileyip tekrar dene.");
         return;
       }
       if (!data) {
@@ -138,6 +142,14 @@ export function ListingDetailClient() {
       const profiles = await loadProfileMini(supabase, [detail.seller_id]);
       if (cancelled) return;
       setSeller(profiles.get(detail.seller_id) ?? null);
+
+      const { data: tagRows } = await supabase
+        .from("user_tags")
+        .select("tag")
+        .eq("user_id", detail.seller_id);
+      if (!cancelled) {
+        setSellerTags(((tagRows ?? []) as { tag: string }[]).map((row) => row.tag));
+      }
 
       const sellerReviews = await loadReviews(supabase, { sellerId: detail.seller_id });
       if (cancelled) return;
@@ -224,7 +236,8 @@ export function ListingDetailClient() {
     const result = await renewListing(supabase, listing.id);
     setSending(false);
     if ("error" in result && result.error) {
-      setError(`İlan yenilenemedi: ${result.error.message}`);
+      console.error("[ilan-yenile]", result.error.message);
+      setError("İlan yenilenemedi. Lütfen tekrar dene.");
       return;
     }
     setListing({ ...listing, created_at: new Date().toISOString() });
@@ -232,7 +245,7 @@ export function ListingDetailClient() {
 
   async function deleteListing() {
     if (!supabase || !listing) return;
-    if (!window.confirm("Bu ilanı silmek istediğine emin misin? Bu işlem geri alınamaz.")) return;
+    setConfirmDelete(false);
     setSending(true);
     const { error: deleteError } = await supabase
       .from(LISTINGS_TABLE)
@@ -240,7 +253,8 @@ export function ListingDetailClient() {
       .eq("id", listing.id);
     setSending(false);
     if (deleteError) {
-      setError(`İlan silinemedi: ${deleteError.message}`);
+      console.error("[ilan-sil]", deleteError.message);
+      setError("İlan silinemedi. Lütfen tekrar dene.");
       return;
     }
     router.push("/ilanlar");
@@ -255,7 +269,8 @@ export function ListingDetailClient() {
     });
     setSending(false);
     if (rpcError) {
-      setError(rpcError.message);
+      console.error("[satis]", rpcError.message);
+      setError("Satış bildirimi gönderilemedi. Lütfen tekrar dene.");
       return;
     }
     setSellDone(true);
@@ -291,7 +306,7 @@ export function ListingDetailClient() {
       {state === "error" && (
         <div className="mt-5 card border-danger/30 px-5 py-6">
           <h1 className="text-sm font-bold text-danger">İlan yüklenemedi</h1>
-          <p className="mt-1.5 break-words text-xs text-muted">{error}</p>
+          <p className="mt-1.5 text-xs text-muted">{error}</p>
         </div>
       )}
 
@@ -413,7 +428,7 @@ export function ListingDetailClient() {
           </div>
 
           <div className="card p-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-start gap-3">
               <FramedAvatar
                 src={seller?.avatar_url}
                 username={seller?.username}
@@ -422,17 +437,21 @@ export function ListingDetailClient() {
                 rounded="rounded-xl"
               />
               <div className="min-w-0 flex-1">
-                <p className="flex flex-wrap items-center gap-1.5 truncate text-sm font-bold">
+                <p className="truncate text-[0.95rem] font-bold">
                   @{seller?.username ?? "satıcı"}
-                  {seller?.verified_seller && <VerifiedTick size={15} />}
-                  {seller?.staff_tag && <StaffBadge tag={seller.staff_tag} small />}
                 </p>
-                {seller?.verified_seller && (
-                  <span className="mt-1 inline-flex">
-                    <VerifiedBadge small />
-                  </span>
-                )}
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.68rem] text-muted-2">
+
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  {seller?.verified_seller && <VerifiedBadge small />}
+                  {sellerTags
+                    .filter((tag) => tag === "vip" || tag === "premium")
+                    .map((tag) => (
+                      <TagBadge key={tag} tag={tag} small />
+                    ))}
+                  {seller?.staff_tag && <StaffBadge tag={seller.staff_tag} small />}
+                </div>
+
+                <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.68rem] text-muted-2">
                   <span className="inline-flex items-center gap-1 text-mint">
                     <CheckIcon width={12} height={12} />
                     {seller?.sales_count ?? 0} başarılı işlem
@@ -463,7 +482,7 @@ export function ListingDetailClient() {
                 </button>
                 <button
                   type="button"
-                  onClick={deleteListing}
+                  onClick={() => setConfirmDelete(true)}
                   disabled={sending}
                   className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-danger/30 bg-danger/8 text-sm font-semibold text-[#ffb3bb] transition hover:bg-danger/15 disabled:opacity-60"
                 >
@@ -585,6 +604,17 @@ export function ListingDetailClient() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="İlan silinsin mi?"
+        description="İlanın yayından tamamen kaldırılacak. Bu işlem geri alınamaz."
+        confirmLabel="İlanı Sil"
+        danger
+        busy={sending}
+        onConfirm={deleteListing}
+        onCancel={() => setConfirmDelete(false)}
+      />
 
       {/* İletişim / satış modalı */}
       {(contactOpen || sellOpen) && (

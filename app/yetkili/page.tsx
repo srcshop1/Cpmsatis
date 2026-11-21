@@ -15,6 +15,7 @@ import {
   XIcon,
 } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { myStaffRole } from "@/lib/social";
 import { StaffBadge, VerifiedTick } from "@/components/user-badge";
@@ -136,6 +137,7 @@ export default function AdminPage() {
   const [salesRows, setSalesRows] = useState<SaleRow[]>([]);
   const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([]);
   const [memberQuery, setMemberQuery] = useState("");
+  const [confirmUser, setConfirmUser] = useState<MemberRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -403,10 +405,7 @@ export default function AdminPage() {
     let message = "İşlem tamam.";
 
     if (action === "delete") {
-      if (!window.confirm("Bu hesabı ve tüm ilanlarını silmek istediğine emin misin?")) {
-        setBusy(null);
-        return;
-      }
+      setBusy(userId);
       const { error } = await supabase.rpc("admin_delete_account", { p_user: userId });
       errorText = error?.message ?? null;
       message = "Hesap silindi.";
@@ -461,7 +460,7 @@ export default function AdminPage() {
     setBusy(null);
     setNotice(
       errorText
-        ? `Hata: ${errorText} — Supabase'de supabase/HEPSI.sql dosyasını çalıştır.`
+        ? "İşlem tamamlanamadı. Lütfen tekrar dene."
         : `${remove ? "Kaldırıldı" : "Verildi"}: ${tag}`,
     );
     await loadTab();
@@ -473,7 +472,7 @@ export default function AdminPage() {
     setNotice(null);
     const { error } = await supabase.rpc("admin_set_role", { p_user: userId, p_role: role });
     setBusy(null);
-    setNotice(error ? `Hata: ${error.message}` : `Rol verildi: ${role}`);
+    setNotice(error ? "Rol verilemedi. Lütfen tekrar dene." : `Rol verildi: ${role}`);
     await loadTab();
   }
 
@@ -519,7 +518,7 @@ export default function AdminPage() {
       setBusy(null);
       if (fallback.error) {
         setNotice(
-          `Tag kaydedilemedi. Supabase → SQL Editor'de supabase/onarim.sql dosyasını çalıştır. (${fallback.error.message})`,
+          "Etiket kaydedilemedi. Lütfen tekrar dene.",
         );
         return;
       }
@@ -530,7 +529,7 @@ export default function AdminPage() {
           .eq("id", profile.id);
       }
       setNotice(
-        `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${tagChoice} (yedek yol kullanıldı)`,
+        `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${tagChoice}`,
       );
       return;
     }
@@ -538,7 +537,7 @@ export default function AdminPage() {
     setBusy(null);
     setNotice(
       error
-        ? `Hata: ${error.message} — Supabase → SQL Editor'de supabase/onarim.sql çalıştır.`
+        ? "İşlem tamamlanamadı. Lütfen tekrar dene."
         : `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${tagChoice}`,
     );
   }
@@ -559,7 +558,7 @@ export default function AdminPage() {
     setBusy(null);
     setNotice(
       error
-        ? `Hata: ${error.message} — Supabase → SQL Editor'de supabase/onarim.sql çalıştır.`
+        ? "İşlem tamamlanamadı. Lütfen tekrar dene."
         : `@${profile.username} artık ${roleChoice}.`,
     );
   }
@@ -578,7 +577,8 @@ export default function AdminPage() {
     });
     setBusy(null);
     if (error) {
-      setNotice(error.message);
+      console.error("[duyuru]", error.message);
+      setNotice("Duyuru yayınlanamadı. Lütfen tekrar dene.");
       return;
     }
     setAnnounceTitle("");
@@ -1014,7 +1014,7 @@ export default function AdminPage() {
                         )}
                         <button
                           type="button"
-                          onClick={() => adminMember(member.id, "delete")}
+                          onClick={() => setConfirmUser(member)}
                           disabled={busy === member.id}
                           className="chip border-danger/40 bg-danger/10 px-2 py-1 text-[0.65rem] text-[#ffb3bb]"
                         >
@@ -1199,6 +1199,24 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={Boolean(confirmUser)}
+        title="Hesap silinsin mi?"
+        description={
+          confirmUser
+            ? `@${confirmUser.username} ve tüm ilanları kalıcı olarak silinecek.`
+            : undefined
+        }
+        confirmLabel="Hesabı Sil"
+        danger
+        busy={Boolean(confirmUser && busy === confirmUser.id)}
+        onConfirm={() => {
+          const target = confirmUser;
+          setConfirmUser(null);
+          if (target) void adminMember(target.id, "delete");
+        }}
+        onCancel={() => setConfirmUser(null)}
+      />
     </AppShell>
   );
 }

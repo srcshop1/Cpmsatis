@@ -70,10 +70,10 @@ function loadImage(src: string) {
 export function storageErrorMessage(message: string) {
   const text = message.toLowerCase();
   if (text.includes("bucket not found")) {
-    return "Fotoğraf deposu (avatars) bulunamadı. Supabase → SQL Editor'de supabase/schema-v3.sql dosyasını çalıştır.";
+    return "Fotoğraf yüklenemedi, lütfen tekrar dene.";
   }
   if (text.includes("row-level security") || text.includes("policy")) {
-    return "Depolama izni yok. Supabase → SQL Editor'de supabase/schema-v4.sql dosyasını çalıştır.";
+    return "Fotoğraf yüklenemedi, lütfen tekrar dene.";
   }
   if (text.includes("mime")) {
     return "Bu dosya türü desteklenmiyor. JPG veya PNG bir fotoğraf seç.";

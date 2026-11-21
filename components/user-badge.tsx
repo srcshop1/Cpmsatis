@@ -44,6 +44,29 @@ export function VerifiedBadge({ small = false }: { small?: boolean }) {
   );
 }
 
+/** VIP / Premium gibi etiket rozetleri */
+export function TagBadge({ tag, small = false }: { tag: string; small?: boolean }) {
+  const config: Record<string, { label: string; className: string }> = {
+    vip: { label: "VIP", className: "border-[#ffd166]/40 bg-[#ffd166]/12 text-[#ffd166]" },
+    premium: {
+      label: "Premium",
+      className: "border-[#c084fc]/40 bg-[#c084fc]/12 text-[#d8b4fe]",
+    },
+  };
+  const item = config[tag];
+  if (!item) return null;
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border font-semibold ${item.className} ${
+        small ? "px-1.5 py-[1px] text-[0.55rem]" : "px-2 py-0.5 text-[0.62rem]"
+      }`}
+    >
+      {item.label}
+    </span>
+  );
+}
+
 /** Kurucu / Moderatör rozeti (herkese görünür) */
 export function StaffBadge({
   tag,

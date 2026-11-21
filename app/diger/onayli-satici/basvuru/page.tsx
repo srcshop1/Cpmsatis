@@ -28,7 +28,8 @@ export default function VerifiedSellerApplyPage() {
     });
 
     if (insertError) {
-      setError(`Başvuru gönderilemedi: ${insertError.message}`);
+      console.error("[basvuru]", insertError.message);
+      setError("Başvurun gönderilemedi. Lütfen tekrar dene.");
       return;
     }
     setSubmitted(true);

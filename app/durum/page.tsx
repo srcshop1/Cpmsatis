@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { SUPABASE_URL, isSupabaseConfigured } from "@/lib/supabase/env";
+import { myStaffRole } from "@/lib/social";
 
 type Check = { name: string; ok: boolean; detail: string };
 
@@ -13,9 +14,15 @@ export default function StatusPage() {
   const [checks, setChecks] = useState<Check[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [running, setRunning] = useState(true);
+  const [isStaff, setIsStaff] = useState<boolean | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setIsStaff(false);
+      return;
+    }
+    void myStaffRole(supabase).then((role) => setIsStaff(Boolean(role)));
     const results: Check[] = [];
 
     results.push({
@@ -89,6 +96,20 @@ export default function StatusPage() {
 
     void run();
   }, []);
+
+  if (isStaff === false) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 text-center">
+        <h1 className="text-lg font-bold">Bu sayfa yetkililer için</h1>
+        <p className="mt-2 text-sm text-muted-2">
+          Bağlantı teşhisi yalnızca kurucu ve moderatörlere açıktır.
+        </p>
+        <Link href="/" className="btn btn-primary mt-5 h-10 px-5 text-sm">
+          Ana sayfaya dön
+        </Link>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-2xl px-4 py-10">

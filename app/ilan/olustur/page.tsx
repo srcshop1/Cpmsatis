@@ -110,7 +110,7 @@ export default function CreateListingPage() {
       return;
     }
     if (!supabase || !user) {
-      setError("Supabase bağlantısı bulunamadı. .env.local dosyasını kontrol et.");
+      setError("Bağlantı kurulamadı. Sayfayı yenileyip tekrar dene.");
       return;
     }
 
@@ -126,7 +126,8 @@ export default function CreateListingPage() {
           .upload(path, image.file, { cacheControl: "31536000", upsert: false });
 
         if (uploadError) {
-          throw new Error(`Görsel yüklenemedi: ${uploadError.message}`);
+          console.error("[gorsel]", uploadError.message);
+          throw new Error("Görsel yüklenemedi. Lütfen tekrar dene.");
         }
         const { data: publicUrl } = supabase.storage
           .from(LISTING_IMAGES_BUCKET)
@@ -171,7 +172,7 @@ export default function CreateListingPage() {
       setError(
         submitError instanceof Error
           ? submitError.message
-          : "İlan oluşturulamadı. supabase/schema-v2.sql çalıştırıldı mı?",
+          : "İlan oluşturulamadı. Sayfayı yenileyip tekrar dene.",
       );
     } finally {
       setSaving(false);

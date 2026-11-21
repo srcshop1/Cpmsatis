@@ -51,7 +51,7 @@ function friendlyError(message: string, status?: number): string {
   if (value.includes("failed to fetch") || value.includes("networkerror"))
     return "Sunucuya ulaşılamadı. İnternet bağlantını kontrol et.";
   if (value.includes("row-level security") || value.includes("permission"))
-    return "Veritabanı izni hatası. SUPABASE-KURULUM.md içindeki SQL'i çalıştırdığından emin ol.";
+    return "İşlem tamamlanamadı. Lütfen biraz sonra tekrar dene.";
   return message;
 }
 
@@ -240,7 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return {
             ok: false,
             message:
-              "Kullanıcı adıyla giriş şu an çalışmıyor. Supabase'de schema.sql çalıştırıldı mı? E-posta ile giriş yapabilirsin.",
+              "Kullanıcı adıyla giriş yapılamadı. E-posta adresinle giriş yapmayı dene.",
           };
         }
         if (!data) {

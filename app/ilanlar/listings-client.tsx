@@ -282,12 +282,8 @@ export function ListingsClient() {
         {loadState === "error" && (
           <div className="card border-danger/30 px-5 py-6">
             <h2 className="text-sm font-bold text-danger">İlanlar yüklenemedi</h2>
-            <p className="mt-1.5 break-words text-xs leading-relaxed text-muted">
-              {loadError}
-            </p>
-            <p className="mt-3 text-xs leading-relaxed text-muted-2">
-              Tablolar oluşturulmamış olabilir. <code className="rounded bg-black/30 px-1">supabase/schema-v2.sql</code>{" "}
-              dosyasını Supabase &gt; SQL Editor&apos;de çalıştır, sonra sayfayı yenile.
+            <p className="mt-1.5 text-xs leading-relaxed text-muted">
+              Bağlantı kurulamadı. İnternetini kontrol edip sayfayı yenilemeyi dene.
             </p>
           </div>
         )}

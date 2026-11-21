@@ -41,7 +41,8 @@ export default function SupportPage() {
     });
 
     if (insertError) {
-      setError(`Talep gönderilemedi: ${insertError.message}`);
+      console.error("[destek]", insertError.message);
+      setError("Talebin gönderilemedi. Lütfen tekrar dene.");
       return;
     }
 
