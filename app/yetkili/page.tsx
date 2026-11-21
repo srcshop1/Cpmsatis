@@ -473,7 +473,7 @@ export default function AdminPage() {
                     @{profiles[request.seller_id]?.username ?? "satıcı"} · {request.days} gün
                   </p>
                   <Link
-                    href={`/ilan/${request.listing_id}`}
+                    href={`/ilan/goruntule?id=${request.listing_id}`}
                     className="text-[0.68rem] text-accent hover:underline"
                   >
                     İlanı görüntüle
@@ -537,7 +537,7 @@ export default function AdminPage() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   {report.conversation_id && (
                     <Link
-                      href={`/mesajlar/${report.conversation_id}`}
+                      href={`/mesajlar/sohbet?id=${report.conversation_id}`}
                       className="btn btn-ghost h-8 px-3 text-[0.7rem]"
                     >
                       Sohbeti incele

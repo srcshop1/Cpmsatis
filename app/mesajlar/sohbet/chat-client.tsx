@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -38,9 +38,9 @@ type ConversationRow = {
 
 type ListingRef = { title: string; price: number; image?: string } | null;
 
-export default function ChatPage() {
-  const params = useParams<{ id: string }>();
-  const router = useRouter();
+export function ChatClient() {
+  const searchParams = useSearchParams();
+  const conversationId = searchParams?.get("id") ?? "";
   const { user } = useAuth();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
@@ -61,14 +61,14 @@ export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!supabase || !user || !params?.id) return;
+    if (!supabase || !user || !conversationId) return;
     let cancelled = false;
 
     const bootstrap = async () => {
       const { data } = await supabase
         .from("conversations")
         .select("id, listing_id, user_a, user_b")
-        .eq("id", params.id)
+        .eq("id", conversationId)
         .maybeSingle();
 
       if (cancelled) return;
@@ -120,7 +120,7 @@ export default function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [supabase, user, params?.id]);
+  }, [supabase, user, conversationId]);
 
   // Yeni mesajları periyodik çek
   useEffect(() => {
@@ -278,7 +278,7 @@ export default function ChatPage() {
 
         {listing && (
           <Link
-            href={`/ilan/${listing.id}`}
+            href={`/ilan/goruntule?id=${listing.id}`}
             className="mt-3 flex items-center gap-2.5 rounded-xl border border-line bg-white/3 p-2"
           >
             {listing.images?.[0] ? (

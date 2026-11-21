@@ -11,7 +11,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
 
   return (
     <Link
-      href={`/ilan/${listing.id}`}
+      href={`/ilan/goruntule?id=${listing.id}`}
       className="card card-hover group flex flex-col overflow-hidden"
     >
       <div className="relative aspect-square w-full overflow-hidden bg-black/40">

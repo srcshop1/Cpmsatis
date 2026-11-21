@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -48,7 +48,8 @@ const REVIEW_ROWS = [
 ] as const;
 
 export function ListingDetailClient() {
-  const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const listingId = searchParams?.get("id") ?? "";
   const router = useRouter();
   const { user } = useAuth();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -73,7 +74,7 @@ export function ListingDetailClient() {
   const isOwner = Boolean(user && listing && user.id === listing.seller_id);
 
   useEffect(() => {
-    if (!supabase || !params?.id) {
+    if (!supabase || !listingId) {
       setState("error");
       setError("Supabase bağlantısı yok.");
       return;
@@ -86,7 +87,7 @@ export function ListingDetailClient() {
         .select(
           "id,title,description_html,price,category,images,created_at,featured_until,seller_id",
         )
-        .eq("id", params.id)
+        .eq("id", listingId)
         .maybeSingle();
 
       if (cancelled) return;
@@ -118,7 +119,7 @@ export function ListingDetailClient() {
     return () => {
       cancelled = true;
     };
-  }, [supabase, params?.id]);
+  }, [supabase, listingId]);
 
   useEffect(() => {
     if (tab !== "listing" || !supabase || !listing) return;
@@ -127,7 +128,7 @@ export function ListingDetailClient() {
 
   async function openContact() {
     if (!user || !listing) {
-      router.push(`/giris?next=${encodeURIComponent(`/ilan/${params?.id ?? ""}`)}`);
+      router.push("/giris");
       return;
     }
     if (isOwner) {
@@ -183,7 +184,7 @@ export function ListingDetailClient() {
       setError(result.error);
       return;
     }
-    router.push(`/mesajlar/${conversationId}`);
+    router.push(`/mesajlar/sohbet?id=${conversationId}`);
   }
 
   async function markSold(buyerId: string) {
