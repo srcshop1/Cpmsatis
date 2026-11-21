@@ -32,7 +32,6 @@ type Tab =
   | "tags"
   | "roles"
   | "announce"
-  | "announcements"
   | "stats";
 
 const TABS: { key: Tab; label: string; ownerOnly?: boolean }[] = [
@@ -45,8 +44,7 @@ const TABS: { key: Tab; label: string; ownerOnly?: boolean }[] = [
   { key: "sales", label: "Satışlar" },
   { key: "tags", label: "Tag Ver" },
   { key: "roles", label: "Moderatör", ownerOnly: true },
-  { key: "announce", label: "Duyuru Yaz", ownerOnly: true },
-  { key: "announcements", label: "Duyurular" },
+  { key: "announce", label: "Duyuru", ownerOnly: true },
   { key: "stats", label: "İstatistik" },
 ];
 
@@ -110,8 +108,6 @@ type MemberRow = {
   created_at: string;
 };
 
-type AnnouncementRow = { id: string; title: string; body: string; created_at: string };
-
 type SaleRow = {
   id: string;
   listing_id: string;
@@ -135,7 +131,6 @@ export default function AdminPage() {
   const [listings, setListings] = useState<ListingRow[]>([]);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [salesRows, setSalesRows] = useState<SaleRow[]>([]);
-  const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([]);
   const [memberQuery, setMemberQuery] = useState("");
   const [confirmUser, setConfirmUser] = useState<MemberRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -145,7 +140,6 @@ export default function AdminPage() {
   const [tagChoice, setTagChoice] = useState("vip");
   const [roleQuery, setRoleQuery] = useState("");
   const [roleChoice, setRoleChoice] = useState("moderator");
-  const [announceTitle, setAnnounceTitle] = useState("");
   const [announceBody, setAnnounceBody] = useState("");
   const [stats, setStats] = useState<Record<string, number>>({});
 
@@ -269,15 +263,6 @@ export default function AdminPage() {
       const rows = (data ?? []) as SaleRow[];
       setSalesRows(rows);
       await loadProfiles(rows.flatMap((row) => [row.seller_id, row.buyer_id]));
-    }
-
-    if (tab === "announcements") {
-      const { data } = await supabase
-        .from("announcements")
-        .select("id, title, body, created_at")
-        .order("created_at", { ascending: false })
-        .limit(40);
-      setAnnouncements((data ?? []) as AnnouncementRow[]);
     }
 
     if (tab === "stats") {
@@ -565,14 +550,15 @@ export default function AdminPage() {
 
   async function publishAnnouncement() {
     if (!supabase) return;
-    if (announceTitle.trim().length < 3 || announceBody.trim().length < 5) {
-      setNotice("Başlık ve duyuru metni gerekli.");
+    const body = announceBody.trim();
+    if (body.length < 5) {
+      setNotice("Duyuru mesajı en az 5 karakter olmalı.");
       return;
     }
     setBusy("announce");
     const { error } = await supabase.from("announcements").insert({
-      title: announceTitle.trim(),
-      body: announceBody.trim(),
+      title: "Duyuru",
+      body,
       created_by: user?.id ?? null,
     });
     setBusy(null);
@@ -581,9 +567,8 @@ export default function AdminPage() {
       setNotice("Duyuru yayınlanamadı. Lütfen tekrar dene.");
       return;
     }
-    setAnnounceTitle("");
     setAnnounceBody("");
-    setNotice("Duyuru yayınlandı.");
+    setNotice("Duyuru yayınlandı, sitenin üstünde görünüyor.");
   }
 
   if (checking) {
@@ -1053,25 +1038,6 @@ export default function AdminPage() {
           </>
         )}
 
-        {tab === "announcements" && (
-          <>
-            {announcements.length === 0 && <Empty text="Duyuru yok." />}
-            {announcements.map((announcement) => (
-              <div key={announcement.id} className="card p-4">
-                <p className="flex items-center justify-between gap-2 text-sm font-semibold">
-                  <span className="truncate">{announcement.title}</span>
-                  <span className="shrink-0 text-[0.62rem] text-muted-2">
-                    {new Date(announcement.created_at).toLocaleDateString("tr-TR")}
-                  </span>
-                </p>
-                <p className="mt-1 whitespace-pre-wrap text-[0.78rem] leading-relaxed text-muted">
-                  {announcement.body}
-                </p>
-              </div>
-            ))}
-          </>
-        )}
-
         {tab === "tags" && (
           <div className="card p-4">
             <h2 className="text-sm font-bold">Tag Ver / Al</h2>
@@ -1155,29 +1121,29 @@ export default function AdminPage() {
         {tab === "announce" && role === "owner" && (
           <div className="card p-4">
             <h2 className="flex items-center gap-2 text-sm font-bold">
-              <BellIcon width={15} height={15} className="text-accent" /> Genel Duyuru
+              <BellIcon width={15} height={15} className="text-accent" /> Duyuru
             </h2>
-            <input
-              className="field mt-3"
-              value={announceTitle}
-              onChange={(event) => setAnnounceTitle(event.target.value)}
-              placeholder="Duyuru başlığı"
-              maxLength={120}
-            />
+            <p className="mt-1 text-[0.7rem] text-muted-2">
+              Yazdığın mesaj sitenin üstünde altın renkli ince bir şerit olarak herkese görünür.
+            </p>
             <textarea
-              className="field mt-2 min-h-24 resize-y"
+              className="field mt-3 min-h-28 resize-y"
               value={announceBody}
               onChange={(event) => setAnnounceBody(event.target.value)}
-              placeholder="Duyuru metni"
-              maxLength={2000}
+              placeholder="Duyuru mesajını yaz…"
+              maxLength={300}
             />
+            <div className="mt-1 flex items-center justify-between text-[0.65rem] text-muted-2">
+              <span>En fazla 300 karakter</span>
+              <span>{announceBody.length}/300</span>
+            </div>
             <button
               type="button"
               onClick={publishAnnouncement}
               disabled={busy === "announce"}
               className="btn btn-primary mt-3 h-10 w-full text-sm"
             >
-              {busy === "announce" ? <Spinner /> : "Duyuruyu Yayınla"}
+              {busy === "announce" ? <Spinner /> : "Yayınla"}
             </button>
           </div>
         )}
