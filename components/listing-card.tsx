@@ -62,21 +62,27 @@ export function ListingCard({ listing }: { listing: Listing }) {
 
         <p className="mt-2 text-[1rem] font-extrabold text-accent">{formatPrice(listing.price)}</p>
 
-        <div className="mt-2 flex items-center gap-1.5 border-t border-line-soft/70 pt-2 text-[0.68rem] text-muted-2">
-          <FramedAvatar
-            src={seller?.avatar_url}
-            username={seller?.username}
-            frame={seller?.equipped_frame}
-            size={22}
-            rounded="rounded-md"
-          />
-          <span className="truncate">@{seller?.username ?? "satıcı"}</span>
-          {seller?.verified_seller && <VerifiedTick size={12} />}
-          {seller?.staff_tag && <StaffBadge tag={seller.staff_tag} small />}
-          <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-mint">
-            <CheckIcon width={11} height={11} />
-            {seller?.sales_count ?? 0} işlem
-          </span>
+        <div className="mt-2 border-t border-line-soft/70 pt-2 text-[0.68rem] text-muted-2">
+          <div className="flex items-center gap-1.5">
+            <FramedAvatar
+              src={seller?.avatar_url}
+              username={seller?.username}
+              frame={seller?.equipped_frame}
+              size={22}
+              rounded="rounded-md"
+            />
+            <span className="min-w-0 flex-1 truncate text-[0.74rem] font-semibold text-ink">
+              @{seller?.username ?? "satıcı"}
+            </span>
+            {seller?.verified_seller && <VerifiedTick size={12} />}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {seller?.staff_tag && <StaffBadge tag={seller.staff_tag} small />}
+            <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-mint">
+              <CheckIcon width={11} height={11} />
+              {seller?.sales_count ?? 0} işlem
+            </span>
+          </div>
         </div>
       </div>
     </Link>
