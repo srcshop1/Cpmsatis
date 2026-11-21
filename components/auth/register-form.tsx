@@ -73,6 +73,14 @@ export function RegisterForm({ nextPath }: { nextPath?: string }) {
     if (!result.ok) {
       setServerError(result.message);
       setServerFieldErrors(result.fieldErrors ?? {});
+      try {
+        localStorage.setItem(
+          "cpms_last_auth_error",
+          JSON.stringify({ at: new Date().toISOString(), kind: "register", ...result }),
+        );
+      } catch {
+        /* yoksay */
+      }
       return;
     }
 

@@ -1,49 +1,66 @@
-import { BoltIcon } from "@/components/icons";
-import { formatPrice, type DemoListing } from "@/lib/catalog";
+"use client";
 
-export function ListingCard({ listing }: { listing: DemoListing }) {
+import Link from "next/link";
+import { CheckIcon, StarIcon } from "@/components/icons";
+import { categoryLabel, isFeatured, type Listing } from "@/lib/listings";
+import { formatPrice } from "@/lib/catalog";
+
+export function ListingCard({ listing }: { listing: Listing }) {
+  const cover = listing.images?.[0];
+  const seller = listing.seller;
+
   return (
-    <article className="card card-hover group flex flex-col overflow-hidden">
-      <div className="relative flex h-28 items-center justify-center border-b border-line-soft/70 bg-[radial-gradient(120%_120%_at_50%_-20%,rgba(255,138,31,0.16),transparent_60%)]">
-        <span className="text-[2.1rem] transition-transform duration-300 group-hover:scale-110" aria-hidden>
-          {listing.icon}
+    <Link
+      href={`/ilan/${listing.id}`}
+      className="card card-hover group flex flex-col overflow-hidden"
+    >
+      <div className="relative aspect-square w-full overflow-hidden bg-black/40">
+        {cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={cover}
+            alt={listing.title}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+            loading="lazy"
+          />
+        ) : (
+          <div className="grid h-full w-full place-items-center text-3xl text-muted-2">🖼️</div>
+        )}
+
+        <span className="absolute left-2 top-2 badge border border-black/30 bg-black/60 text-[0.62rem] text-white backdrop-blur">
+          {categoryLabel(listing.category)}
         </span>
-        <span className="absolute left-2.5 top-2.5 badge border border-line bg-black/40 text-[0.65rem] text-muted">
-          {listing.category}
-        </span>
-        <span className="absolute right-2.5 top-2.5 badge border border-mint/25 bg-mint/10 text-[0.65rem] text-mint">
-          <BoltIcon width={10} height={10} /> {listing.delivery}
-        </span>
+
+        {isFeatured(listing) && (
+          <span className="absolute right-2 top-2 badge border border-accent/40 bg-accent/90 text-[0.62rem] font-bold text-ink">
+            <StarIcon width={10} height={10} /> ÖNE ÇIKAN
+          </span>
+        )}
       </div>
 
-      <div className="flex flex-1 flex-col p-3.5">
-        <h3 className="line-clamp-2 text-[0.9rem] font-semibold leading-snug text-text">
+      <div className="flex flex-1 flex-col p-3">
+        <h3 className="line-clamp-2 min-h-[2.4rem] text-[0.85rem] font-semibold leading-snug">
           {listing.title}
         </h3>
 
-        <div className="mt-2 flex items-center gap-1.5 text-[0.72rem] text-muted-2">
-          <span className="grid h-5 w-5 place-items-center rounded-md bg-white/6 text-[0.6rem] font-bold text-muted">
-            {listing.seller.charAt(0).toUpperCase()}
-          </span>
-          <span className="truncate">@{listing.seller}</span>
-          <span className="text-accent">★ {listing.rating.toFixed(1)}</span>
-          <span className="ml-auto shrink-0">{listing.sales} satış</span>
-        </div>
+        <p className="mt-2 text-[1rem] font-extrabold text-accent">{formatPrice(listing.price)}</p>
 
-        <div className="mt-3 flex items-end justify-between gap-2 border-t border-line-soft/70 pt-3">
-          <div>
-            <p className="text-[0.62rem] uppercase tracking-wider text-muted-2">Fiyat</p>
-            <p className="text-[1.02rem] font-bold text-text">{formatPrice(listing.price)}</p>
-          </div>
-          <button
-            type="button"
-            className="btn btn-primary h-8 rounded-lg px-3 text-[0.78rem]"
-            title="Satın alma akışı sonraki adımda eklenecek"
-          >
-            Satın Al
-          </button>
+        <div className="mt-2 flex items-center gap-1.5 border-t border-line-soft/70 pt-2 text-[0.68rem] text-muted-2">
+          <span className="grid h-5 w-5 shrink-0 place-items-center overflow-hidden rounded-md bg-white/8 text-[0.58rem] font-bold text-muted">
+            {seller?.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={seller.avatar_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              (seller?.username ?? "?").charAt(0).toUpperCase()
+            )}
+          </span>
+          <span className="truncate">@{seller?.username ?? "satıcı"}</span>
+          <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-mint">
+            <CheckIcon width={11} height={11} />
+            {seller?.sales_count ?? 0} işlem
+          </span>
         </div>
       </div>
-    </article>
+    </Link>
   );
 }

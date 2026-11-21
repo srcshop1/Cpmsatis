@@ -1,14 +1,6 @@
-import type { Metadata } from "next";
-import { Suspense } from "react";
-import { AuthPageLoading } from "@/components/auth/auth-page-loading";
-import { PanelClient } from "./panel-client";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Panelim" };
-
+/** Eski panel adresi artık İlanlar'a gider. */
 export default function PanelPage() {
-  return (
-    <Suspense fallback={<AuthPageLoading />}>
-      <PanelClient />
-    </Suspense>
-  );
+  redirect("/ilanlar");
 }
