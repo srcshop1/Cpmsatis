@@ -141,6 +141,12 @@ export default function AdminPage() {
   const [roleQuery, setRoleQuery] = useState("");
   const [roleChoice, setRoleChoice] = useState("moderator");
   const [announceBody, setAnnounceBody] = useState("");
+  const [currentAnnouncement, setCurrentAnnouncement] = useState<{
+    id: string;
+    body: string;
+    created_at: string;
+  } | null>(null);
+  const [confirmAnnouncement, setConfirmAnnouncement] = useState(false);
   const [stats, setStats] = useState<Record<string, number>>({});
 
   const loadProfiles = useCallback(
@@ -263,6 +269,18 @@ export default function AdminPage() {
       const rows = (data ?? []) as SaleRow[];
       setSalesRows(rows);
       await loadProfiles(rows.flatMap((row) => [row.seller_id, row.buyer_id]));
+    }
+
+    if (tab === "announce") {
+      const { data } = await supabase
+        .from("announcements")
+        .select("id, body, created_at")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setCurrentAnnouncement(
+        data ? (data as { id: string; body: string; created_at: string }) : null,
+      );
     }
 
     if (tab === "stats") {
@@ -548,6 +566,25 @@ export default function AdminPage() {
     );
   }
 
+  async function removeAnnouncement() {
+    if (!supabase || !currentAnnouncement) return;
+    setConfirmAnnouncement(false);
+    setBusy("announce");
+    const { error } = await supabase
+      .from("announcements")
+      .delete()
+      .eq("id", currentAnnouncement.id);
+    setBusy(null);
+    if (error) {
+      console.error("[duyuru-sil]", error.message);
+      setNotice("Duyuru kaldırılamadı. Lütfen tekrar dene.");
+      return;
+    }
+    setCurrentAnnouncement(null);
+    setNotice("Duyuru kaldırıldı.");
+    await loadTab();
+  }
+
   async function publishAnnouncement() {
     if (!supabase) return;
     const body = announceBody.trim();
@@ -569,6 +606,7 @@ export default function AdminPage() {
     }
     setAnnounceBody("");
     setNotice("Duyuru yayınlandı, sitenin üstünde görünüyor.");
+    await loadTab();
   }
 
   if (checking) {
@@ -1126,6 +1164,29 @@ export default function AdminPage() {
             <p className="mt-1 text-[0.7rem] text-muted-2">
               Yazdığın mesaj sitenin üstünde altın renkli ince bir şerit olarak herkese görünür.
             </p>
+
+            {currentAnnouncement && (
+              <div className="mt-3 rounded-xl border border-[#ffd166]/30 bg-[#ffd166]/8 p-3">
+                <p className="flex items-center justify-between gap-2 text-[0.62rem] font-semibold uppercase tracking-wider text-[#ffd166]">
+                  Yayındaki duyuru
+                  <span className="shrink-0 text-[0.58rem] font-normal text-muted-2">
+                    {new Date(currentAnnouncement.created_at).toLocaleDateString("tr-TR")}
+                  </span>
+                </p>
+                <p className="mt-1 whitespace-pre-wrap break-words text-[0.8rem] leading-relaxed text-text">
+                  {currentAnnouncement.body}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setConfirmAnnouncement(true)}
+                  disabled={busy === "announce"}
+                  className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-3 text-[0.7rem] font-semibold text-[#ffb3bb] transition hover:bg-danger/15 disabled:opacity-60"
+                >
+                  <XIcon width={12} height={12} /> Duyuruyu Kaldır
+                </button>
+              </div>
+            )}
+
             <textarea
               className="field mt-3 min-h-28 resize-y"
               value={announceBody}
@@ -1165,6 +1226,17 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={confirmAnnouncement}
+        title="Duyuru kaldırılsın mı?"
+        description="Duyuru sitenin üstünden kalkar. Bu işlem geri alınamaz."
+        confirmLabel="Kaldır"
+        danger
+        busy={busy === "announce"}
+        onConfirm={removeAnnouncement}
+        onCancel={() => setConfirmAnnouncement(false)}
+      />
+
       <ConfirmDialog
         open={Boolean(confirmUser)}
         title="Hesap silinsin mi?"

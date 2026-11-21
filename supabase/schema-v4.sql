@@ -164,6 +164,20 @@ drop policy if exists "Görseller herkese açık" on storage.objects;
 create policy "Görseller herkese açık" on storage.objects for select
   using (bucket_id in ('listing-images','avatars'));
 
+-- ---------- 5b) DUYURU SİLME (kurucu) ----------
+alter table public.announcements enable row level security;
+
+drop policy if exists "Duyuru herkese açık" on public.announcements;
+create policy "Duyuru herkese açık" on public.announcements for select using (true);
+
+drop policy if exists "Duyuru yazma kurucu" on public.announcements;
+create policy "Duyuru yazma kurucu" on public.announcements for insert to authenticated
+  with check (public.my_staff_role() = 'owner');
+
+drop policy if exists "Duyuru silme kurucu" on public.announcements;
+create policy "Duyuru silme kurucu" on public.announcements for delete to authenticated
+  using (public.my_staff_role() = 'owner');
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 
