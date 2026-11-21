@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let { data, error } = await supabase
         .from("profiles")
         .select(
-          "username, avatar_url, rating, sales_count, review_count, verified_seller, equipped_frame",
+          "username, avatar_url, rating, sales_count, review_count, verified_seller, equipped_frame, staff_tag",
         )
         .eq("id", authUser.id)
         .maybeSingle();
@@ -111,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         reviewCount: data.review_count,
         verifiedSeller: data.verified_seller,
         frame: data.equipped_frame,
+        staffTag: data.staff_tag,
         createdAt: authUser.created_at,
       };
     },

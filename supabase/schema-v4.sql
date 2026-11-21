@@ -1,0 +1,172 @@
+-- ============================================================
+--  CPM Satış · v4 EKLENTİLERİ
+--  Supabase > SQL Editor > New query > tamamını yapıştır > Run
+--  schema-v3'ün ÜZERİNE çalıştırılır. Tekrar çalıştırılabilir.
+-- ============================================================
+
+-- ---------- 1) ÇOKLU KATEGORİ ----------
+alter table public.listings add column if not exists categories text[] not null default '{}';
+update public.listings
+   set categories = array[category]
+ where coalesce(array_length(categories, 1), 0) = 0;
+create index if not exists listings_categories_idx on public.listings using gin (categories);
+
+-- ---------- 2) HERKESE AÇIK YETKİLİ ETİKETİ ----------
+alter table public.profiles add column if not exists staff_tag text;
+alter table public.profiles drop constraint if exists profiles_staff_tag_check;
+alter table public.profiles
+  add constraint profiles_staff_tag_check check (staff_tag is null or staff_tag in ('owner','moderator'));
+
+update public.profiles p
+   set staff_tag = r.role
+  from public.user_roles r
+ where r.user_id = p.id;
+
+-- ---------- 3) YETKİLİ FONKSİYONLARI ----------
+create or replace function public.admin_set_role(p_user uuid, p_role text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_staff_role() <> 'owner' then raise exception 'Sadece kurucu rol verebilir'; end if;
+  if p_role not in ('owner','moderator') then raise exception 'Geçersiz rol'; end if;
+  insert into public.user_roles (user_id, role, granted_by)
+  values (p_user, p_role, auth.uid())
+  on conflict (user_id) do update set role = p_role;
+  update public.profiles set staff_tag = p_role where id = p_user;
+end; $$;
+grant execute on function public.admin_set_role(uuid, text) to authenticated;
+
+create or replace function public.admin_remove_role(p_user uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_staff_role() <> 'owner' then raise exception 'Sadece kurucu yapabilir'; end if;
+  if p_user = auth.uid() then raise exception 'Kendi rolünü kaldıramazsın'; end if;
+  delete from public.user_roles where user_id = p_user;
+  update public.profiles set staff_tag = null where id = p_user;
+end; $$;
+grant execute on function public.admin_remove_role(uuid) to authenticated;
+
+-- Ban / ban kaldır
+create or replace function public.admin_set_banned(p_user uuid, p_banned boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+  if p_user = auth.uid() then raise exception 'Kendini banlayamazsın'; end if;
+  if (select role from public.user_roles where user_id = p_user) = 'owner' then
+    raise exception 'Kurucu banlanamaz';
+  end if;
+  update public.profiles set banned = p_banned where id = p_user;
+  if p_banned then
+    update public.listings set status = 'hidden' where seller_id = p_user and status = 'active';
+  end if;
+end; $$;
+grant execute on function public.admin_set_banned(uuid, boolean) to authenticated;
+
+-- Hesabı sil (profil + ilanları + mesajları cascade ile gider)
+create or replace function public.admin_delete_account(p_user uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_staff_role() <> 'owner' then raise exception 'Sadece kurucu silebilir'; end if;
+  if p_user = auth.uid() then raise exception 'Kendi hesabını silemezsin'; end if;
+  if (select role from public.user_roles where user_id = p_user) = 'owner' then
+    raise exception 'Kurucu hesabı silinemez';
+  end if;
+  delete from public.profiles where id = p_user;
+end; $$;
+grant execute on function public.admin_delete_account(uuid) to authenticated;
+
+-- İlanı öne çıkar / gizle
+create or replace function public.admin_feature_listing(p_listing uuid, p_days integer)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+  update public.listings
+     set featured_until = now() + make_interval(days => greatest(1, least(p_days, 30)))
+   where id = p_listing;
+end; $$;
+grant execute on function public.admin_feature_listing(uuid, integer) to authenticated;
+
+create or replace function public.admin_set_listing_status(p_listing uuid, p_status text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+  if p_status not in ('active','hidden','removed','sold') then raise exception 'Geçersiz durum'; end if;
+  update public.listings set status = p_status where id = p_listing;
+end; $$;
+grant execute on function public.admin_set_listing_status(uuid, text) to authenticated;
+
+-- ---------- 4) BANLI KULLANICI YENİ İLAN AÇAMASIN ----------
+create or replace function public.block_banned_listing() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if (select banned from public.profiles where id = new.seller_id) then
+    raise exception 'Hesabınız kısıtlandığı için ilan oluşturamazsınız';
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists listings_block_banned on public.listings;
+create trigger listings_block_banned before insert on public.listings
+for each row execute function public.block_banned_listing();
+
+-- ---------- 4b) İLAN SÜRESİ: 15 GÜN ----------
+-- Süresi dolan ilanlar listeden kalkar (sahibi "Yenile" ile tekrar yayınlar)
+create or replace function public.expire_listings()
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer;
+begin
+  update public.listings
+     set status = 'hidden'
+   where status = 'active'
+     and created_at < now() - interval '15 days';
+  get diagnostics v_count = row_count;
+  return v_count;
+end; $$;
+grant execute on function public.expire_listings() to anon, authenticated;
+
+create or replace function public.renew_listing(p_listing uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (
+    select 1 from public.listings where id = p_listing and seller_id = auth.uid()
+  ) then
+    raise exception 'Bu ilanın sahibi değilsin';
+  end if;
+  if (select banned from public.profiles where id = auth.uid()) then
+    raise exception 'Hesabınız kısıtlandığı için ilan yenilenemez';
+  end if;
+  update public.listings set created_at = now(), status = 'active' where id = p_listing;
+end; $$;
+grant execute on function public.renew_listing(uuid) to authenticated;
+
+-- ---------- 5) DEPOLAMA (avatar / ilan görselleri) ----------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('avatars','avatars',true,4194304, array['image/jpeg','image/png','image/webp','image/jpg'])
+on conflict (id) do update set public = true, file_size_limit = 4194304;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('listing-images','listing-images',true,8388608,
+        array['image/jpeg','image/png','image/webp','image/gif','image/jpg'])
+on conflict (id) do update set public = true, file_size_limit = 8388608;
+
+drop policy if exists "Kullanıcı kendi klasörüne yükler" on storage.objects;
+create policy "Kullanıcı kendi klasörüne yükler" on storage.objects for insert to authenticated
+  with check (bucket_id in ('listing-images','avatars')
+              and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Kullanıcı kendi görselini günceller" on storage.objects;
+create policy "Kullanıcı kendi görselini günceller" on storage.objects for update to authenticated
+  using (bucket_id in ('listing-images','avatars')
+         and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id in ('listing-images','avatars')
+              and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "Görseller herkese açık" on storage.objects;
+create policy "Görseller herkese açık" on storage.objects for select
+  using (bucket_id in ('listing-images','avatars'));
+
+-- ---------- 6) ÖNBELLEK ----------
+notify pgrst, 'reload schema';
+
+select
+  (select count(*) from public.listings where coalesce(array_length(categories,1),0) > 0) as "kategorili ilan",
+  (select count(*) from public.profiles where staff_tag is not null) as "yetkili etiketli profil";

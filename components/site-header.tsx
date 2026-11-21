@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { BellIcon, LogoutIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { Logo } from "@/components/logo";
+import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function SiteHeader() {
@@ -108,17 +109,18 @@ export function SiteHeader() {
                 href="/profil"
                 className="flex items-center gap-2 rounded-xl border border-line bg-white/3 py-1.5 pl-1.5 pr-3 transition hover:border-[#34405a]"
               >
-                <span className="grid h-7 w-7 place-items-center overflow-hidden rounded-lg bg-gradient-to-br from-accent-soft to-accent-deep text-[0.8rem] font-bold text-ink">
-                  {user.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    user.username.charAt(0).toUpperCase()
-                  )}
-                </span>
+                <FramedAvatar
+                  src={user.avatarUrl}
+                  username={user.username}
+                  frame={user.frame}
+                  size={28}
+                  rounded="rounded-lg"
+                />
                 <span className="hidden max-w-[8rem] truncate text-sm font-semibold sm:block">
                   {user.username}
                 </span>
+                {user.verifiedSeller && <VerifiedTick size={13} />}
+                {user.staffTag && <StaffBadge tag={user.staffTag} small />}
               </Link>
 
               <button

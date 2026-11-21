@@ -9,15 +9,19 @@ arasında mesajlaşarak yapılır.
 - **İlanlar:** arama + filtre (kategori çoklu seçim, min/maks fiyat, yalnızca çevrimiçi
   satıcı, 10+ başarılı işlem), kare kartlar, orijinal boyutlu detay galerisi.
 - **İlan oluştur:** en fazla 6 görsel, 72 karakter başlık, zengin metin açıklama,
-  zorunlu fiyat (0 – 50.000.000 ₺), "İlanı Öne Çıkar" (VIP/Premium kotası veya yetkili onayı).
+  zorunlu fiyat (0 – 50.000.000 ₺), **çoklu kategori** (en az 1), "İlanı Öne Çıkar".
+- **İlan ömrü 15 gün:** süresi dolan ilan listeden kalkar, sahibi "İlanı Yenile" ile uzatır.
+- **Filtreler:** kategori, fiyat aralığı, çevrimiçi satıcı, 10+ işlem, **yalnızca onaylı satıcı**.
 - **Mesajlar:** sohbet listesi, gerçek zamanlıya yakın yazışma, üç nokta menüsü
   (engelle / sohbeti temizle / bildir — 10 sebep + açıklama).
 - **Satış akışı:** "Satış yaptım" → müşteri seç → alıcı onayı → "Siparişi Onayla" →
   başarılı işlem +1, 24 saatte yanıt gelmezse otomatik onay. Sonrasında 5 eksenli değerlendirme.
 - **Profil:** fotoğraf, kullanıcı adı ve şifre değiştirme, çerçeveler, değerlendirme ortalamaları.
 - **Diğer:** SSS (15 soru), destek talebi, onaylı satıcı başvurusu, canlı destek (yakında).
-- **Yetkili paneli:** destek talepleri, onaylı satıcı başvuruları, öne çıkarma, bildiriler,
-  tag ver/al, üye istatistikleri; sadece kurucuda moderatör atama ve genel duyuru.
+- **Yetkili paneli:** destek, onaylı satıcı, öne çıkarma, bildiriler, **ilan yönetimi**,
+  **üyeler (ban / hesap sil / rol)**, satışlar, tag ver/al, duyurular ve istatistik.
+- **Rozetler:** Onaylı Satıcı için mavi tik + "Onaylı Satıcı" etiketi, kurucu/moderatör
+  etiketi herkese görünür; profil çerçeveleri avatarın her yerinde çalışır.
 
 ## Teknolojiler
 

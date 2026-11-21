@@ -12,11 +12,21 @@ import {
   ClockIcon,
   MessageIcon,
   ShieldIcon,
+  TrashIcon,
   StarIcon,
   XIcon,
 } from "@/components/icons";
 import { formatPrice } from "@/lib/catalog";
-import { LISTINGS_TABLE, categoryLabel, type ListingSeller } from "@/lib/listings";
+import {
+  LISTING_LIFETIME_DAYS,
+  LISTINGS_TABLE,
+  categoryLabel,
+  daysLeft,
+  listingExpiresAt,
+  renewListing,
+  type ListingSeller,
+} from "@/lib/listings";
+import { FramedAvatar, StaffBadge, VerifiedBadge, VerifiedTick } from "@/components/user-badge";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
 import {
@@ -33,6 +43,7 @@ type Detail = {
   description_html: string | null;
   price: number;
   category: string;
+  categories: string[] | null;
   images: string[] | null;
   created_at: string;
   featured_until: string | null;
@@ -85,7 +96,7 @@ export function ListingDetailClient() {
       const { data, error: queryError } = await supabase
         .from(LISTINGS_TABLE)
         .select(
-          "id,title,description_html,price,category,images,created_at,featured_until,seller_id",
+          "id,title,description_html,price,category,categories,images,created_at,featured_until,seller_id",
         )
         .eq("id", listingId)
         .maybeSingle();
@@ -185,6 +196,34 @@ export function ListingDetailClient() {
       return;
     }
     router.push(`/mesajlar/sohbet?id=${conversationId}`);
+  }
+
+  async function renew() {
+    if (!supabase || !listing) return;
+    setSending(true);
+    const result = await renewListing(supabase, listing.id);
+    setSending(false);
+    if ("error" in result && result.error) {
+      setError(`İlan yenilenemedi: ${result.error.message}`);
+      return;
+    }
+    setListing({ ...listing, created_at: new Date().toISOString() });
+  }
+
+  async function deleteListing() {
+    if (!supabase || !listing) return;
+    if (!window.confirm("Bu ilanı silmek istediğine emin misin? Bu işlem geri alınamaz.")) return;
+    setSending(true);
+    const { error: deleteError } = await supabase
+      .from(LISTINGS_TABLE)
+      .delete()
+      .eq("id", listing.id);
+    setSending(false);
+    if (deleteError) {
+      setError(`İlan silinemedi: ${deleteError.message}`);
+      return;
+    }
+    router.push("/ilanlar");
   }
 
   async function markSold(buyerId: string) {
@@ -311,8 +350,18 @@ export function ListingDetailClient() {
           <div className="card p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <span className="badge border border-line bg-white/4 text-[0.62rem] text-muted">
-                  {categoryLabel(listing.category)}
+                <span className="flex flex-wrap gap-1">
+                  {(listing.categories && listing.categories.length > 0
+                    ? listing.categories
+                    : [listing.category]
+                  ).map((slug) => (
+                    <span
+                      key={slug}
+                      className="badge border border-line bg-white/4 text-[0.62rem] text-muted"
+                    >
+                      {categoryLabel(slug)}
+                    </span>
+                  ))}
                 </span>
                 <h1 className="mt-2 text-lg font-extrabold leading-snug sm:text-xl">
                   {listing.title}
@@ -323,39 +372,46 @@ export function ListingDetailClient() {
               </p>
             </div>
 
-            <p className="mt-2 inline-flex items-center gap-1 text-[0.68rem] text-muted-2">
-              <ClockIcon width={12} height={12} />
-              {new Date(listing.created_at).toLocaleDateString("tr-TR", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
+            <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.68rem] text-muted-2">
+              <span className="inline-flex items-center gap-1">
+                <ClockIcon width={12} height={12} />
+                {new Date(listing.created_at).toLocaleDateString("tr-TR", {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 ${
+                  daysLeft(listing.created_at) <= 3 ? "text-[#ffb3bb]" : "text-muted-2"
+                }`}
+              >
+                {daysLeft(listing.created_at)} gün kaldı ·{" "}
+                {listingExpiresAt(listing.created_at).toLocaleDateString("tr-TR")} tarihinde kalkar
+              </span>
             </p>
           </div>
 
           <div className="card p-4">
             <div className="flex items-center gap-3">
-              <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-accent-soft to-accent-deep text-lg font-extrabold text-ink">
-                {seller?.avatar_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={seller.avatar_url} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  (seller?.username ?? "?").charAt(0).toUpperCase()
-                )}
-              </span>
+              <FramedAvatar
+                src={seller?.avatar_url}
+                username={seller?.username}
+                frame={seller?.equipped_frame}
+                size={48}
+                rounded="rounded-xl"
+              />
               <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-1.5 truncate text-sm font-bold">
+                <p className="flex flex-wrap items-center gap-1.5 truncate text-sm font-bold">
                   @{seller?.username ?? "satıcı"}
-                  {seller?.verified_seller && (
-                    <span
-                      className="text-mint"
-                      title="Onaylı Satıcı"
-                      aria-label="Onaylı Satıcı"
-                    >
-                      <ShieldIcon width={14} height={14} />
-                    </span>
-                  )}
+                  {seller?.verified_seller && <VerifiedTick size={15} />}
+                  {seller?.staff_tag && <StaffBadge tag={seller.staff_tag} small />}
                 </p>
+                {seller?.verified_seller && (
+                  <span className="mt-1 inline-flex">
+                    <VerifiedBadge small />
+                  </span>
+                )}
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.68rem] text-muted-2">
                   <span className="inline-flex items-center gap-1 text-mint">
                     <CheckIcon width={12} height={12} />
@@ -372,13 +428,28 @@ export function ListingDetailClient() {
             </div>
 
             {isOwner ? (
-              <button
-                type="button"
-                onClick={openContact}
-                className="btn btn-primary mt-3 h-11 w-full"
+              <div className="mt-3 space-y-2"
               >
-                Satış Yaptım — Müşteriyi Seç
-              </button>
+                <button type="button" onClick={openContact} className="btn btn-primary h-11 w-full">
+                  Satış Yaptım — Müşteriyi Seç
+                </button>
+                <button
+                  type="button"
+                  onClick={renew}
+                  disabled={sending}
+                  className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-line bg-white/4 text-sm font-semibold text-muted transition hover:text-text disabled:opacity-60"
+                >
+                  <ClockIcon width={15} height={15} /> İlanı Yenile ({LISTING_LIFETIME_DAYS} gün)
+                </button>
+                <button
+                  type="button"
+                  onClick={deleteListing}
+                  disabled={sending}
+                  className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-danger/30 bg-danger/8 text-sm font-semibold text-[#ffb3bb] transition hover:bg-danger/15 disabled:opacity-60"
+                >
+                  <TrashIcon width={15} height={15} /> İlanı Sil
+                </button>
+              </div>
             ) : (
               <button
                 type="button"

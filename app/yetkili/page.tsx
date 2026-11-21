@@ -17,17 +17,35 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { myStaffRole } from "@/lib/social";
+import { StaffBadge, VerifiedTick } from "@/components/user-badge";
+import { formatPrice } from "@/lib/catalog";
 
-type Tab = "tickets" | "applications" | "featured" | "reports" | "tags" | "roles" | "announce" | "stats";
+type Tab =
+  | "tickets"
+  | "applications"
+  | "featured"
+  | "reports"
+  | "listings"
+  | "members"
+  | "sales"
+  | "tags"
+  | "roles"
+  | "announce"
+  | "announcements"
+  | "stats";
 
 const TABS: { key: Tab; label: string; ownerOnly?: boolean }[] = [
   { key: "tickets", label: "Destek" },
   { key: "applications", label: "Onaylı Satıcı" },
   { key: "featured", label: "Öne Çıkar" },
   { key: "reports", label: "Bildiriler" },
+  { key: "listings", label: "İlanlar" },
+  { key: "members", label: "Üyeler" },
+  { key: "sales", label: "Satışlar" },
   { key: "tags", label: "Tag Ver" },
   { key: "roles", label: "Moderatör", ownerOnly: true },
-  { key: "announce", label: "Duyuru", ownerOnly: true },
+  { key: "announce", label: "Duyuru Yaz", ownerOnly: true },
+  { key: "announcements", label: "Duyurular" },
   { key: "stats", label: "İstatistik" },
 ];
 
@@ -69,6 +87,39 @@ type Report = {
 
 type ProfileRow = { id: string; username: string; email: string | null; sales_count: number | null };
 
+type ListingRow = {
+  id: string;
+  title: string;
+  price: number;
+  status: string;
+  featured_until: string | null;
+  categories: string[] | null;
+  seller_id: string;
+  created_at: string;
+};
+
+type MemberRow = {
+  id: string;
+  username: string;
+  email: string | null;
+  sales_count: number | null;
+  verified_seller: boolean | null;
+  staff_tag: string | null;
+  banned: boolean | null;
+  created_at: string;
+};
+
+type AnnouncementRow = { id: string; title: string; body: string; created_at: string };
+
+type SaleRow = {
+  id: string;
+  listing_id: string;
+  seller_id: string;
+  buyer_id: string;
+  status: string;
+  created_at: string;
+};
+
 export default function AdminPage() {
   const { user } = useAuth();
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -80,6 +131,11 @@ export default function AdminPage() {
   const [featured, setFeatured] = useState<FeaturedRequest[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [profiles, setProfiles] = useState<Record<string, ProfileRow>>({});
+  const [listings, setListings] = useState<ListingRow[]>([]);
+  const [members, setMembers] = useState<MemberRow[]>([]);
+  const [salesRows, setSalesRows] = useState<SaleRow[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementRow[]>([]);
+  const [memberQuery, setMemberQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -162,6 +218,46 @@ export default function AdminPage() {
       );
     }
 
+    if (tab === "listings") {
+      const { data } = await supabase
+        .from("listings")
+        .select("id, title, price, status, featured_until, categories, seller_id, created_at")
+        .order("created_at", { ascending: false })
+        .limit(40);
+      const rows = (data ?? []) as ListingRow[];
+      setListings(rows);
+      await loadProfiles(rows.map((row) => row.seller_id));
+    }
+
+    if (tab === "members") {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, username, email, sales_count, verified_seller, staff_tag, banned, created_at")
+        .order("created_at", { ascending: false })
+        .limit(80);
+      setMembers((data ?? []) as MemberRow[]);
+    }
+
+    if (tab === "sales") {
+      const { data } = await supabase
+        .from("sales")
+        .select("id, listing_id, seller_id, buyer_id, status, created_at")
+        .order("created_at", { ascending: false })
+        .limit(40);
+      const rows = (data ?? []) as SaleRow[];
+      setSalesRows(rows);
+      await loadProfiles(rows.flatMap((row) => [row.seller_id, row.buyer_id]));
+    }
+
+    if (tab === "announcements") {
+      const { data } = await supabase
+        .from("announcements")
+        .select("id, title, body, created_at")
+        .order("created_at", { ascending: false })
+        .limit(40);
+      setAnnouncements((data ?? []) as AnnouncementRow[]);
+    }
+
     if (tab === "stats") {
       const [{ count: userCount }, { count: listingCount }, { count: saleCount }, { count: ticketCount }] =
         await Promise.all([
@@ -235,6 +331,108 @@ export default function AdminPage() {
     setBusy(id);
     await supabase.from("reports").update({ status }).eq("id", id);
     setBusy(null);
+    await loadTab();
+  }
+
+  async function adminListing(
+    id: string,
+    action: "feature1" | "feature3" | "feature7" | "hide" | "active" | "delete",
+  ) {
+    if (!supabase) return;
+    setBusy(id);
+    setNotice(null);
+
+    let message = "İşlem tamam.";
+    let errorText: string | null = null;
+
+    if (action === "delete") {
+      const { error } = await supabase.from("listings").delete().eq("id", id);
+      errorText = error?.message ?? null;
+      message = "İlan silindi.";
+    } else if (action === "hide" || action === "active") {
+      const { error } = await supabase.rpc("admin_set_listing_status", {
+        p_listing: id,
+        p_status: action === "hide" ? "hidden" : "active",
+      });
+      errorText = error?.message ?? null;
+      message = action === "hide" ? "İlan gizlendi." : "İlan yayına alındı.";
+    } else {
+      const days = Number(action.replace("feature", ""));
+      const { error } = await supabase.rpc("admin_feature_listing", {
+        p_listing: id,
+        p_days: days,
+      });
+      errorText = error?.message ?? null;
+      message = `İlan ${days} gün öne çıkarıldı.`;
+    }
+
+    setBusy(null);
+    setNotice(errorText ? `Hata: ${errorText}` : message);
+    await loadTab();
+  }
+
+  async function adminMember(
+    userId: string,
+    action: "ban" | "unban" | "delete" | "demote",
+  ) {
+    if (!supabase) return;
+    setBusy(userId);
+    setNotice(null);
+
+    let errorText: string | null = null;
+    let message = "İşlem tamam.";
+
+    if (action === "delete") {
+      if (!window.confirm("Bu hesabı ve tüm ilanlarını silmek istediğine emin misin?")) {
+        setBusy(null);
+        return;
+      }
+      const { error } = await supabase.rpc("admin_delete_account", { p_user: userId });
+      errorText = error?.message ?? null;
+      message = "Hesap silindi.";
+    } else if (action === "demote") {
+      const { error } = await supabase.rpc("admin_remove_role", { p_user: userId });
+      errorText = error?.message ?? null;
+      message = "Yetki kaldırıldı.";
+    } else {
+      const { error } = await supabase.rpc("admin_set_banned", {
+        p_user: userId,
+        p_banned: action === "ban",
+      });
+      errorText = error?.message ?? null;
+      message = action === "ban" ? "Kullanıcı banlandı." : "Ban kaldırıldı.";
+    }
+
+    setBusy(null);
+    setNotice(errorText ? `Hata: ${errorText}` : message);
+    await loadTab();
+  }
+
+  async function tagMember(userId: string, tag: string, remove: boolean) {
+    if (!supabase) return;
+    setBusy(`${userId}-${tag}`);
+    setNotice(null);
+    const { error } = await supabase.rpc("admin_set_tag", {
+      p_user: userId,
+      p_tag: tag,
+      p_remove: remove,
+    });
+    setBusy(null);
+    setNotice(
+      error
+        ? `Hata: ${error.message} — supabase/onarim.sql çalıştırılmış mı?`
+        : `${remove ? "Kaldırıldı" : "Verildi"}: ${tag}`,
+    );
+    await loadTab();
+  }
+
+  async function setMemberRole(userId: string, role: string) {
+    if (!supabase) return;
+    setBusy(`${userId}-role`);
+    setNotice(null);
+    const { error } = await supabase.rpc("admin_set_role", { p_user: userId, p_role: role });
+    setBusy(null);
+    setNotice(error ? `Hata: ${error.message}` : `Rol verildi: ${role}`);
     await loadTab();
   }
 
@@ -592,6 +790,241 @@ export default function AdminPage() {
                     Kapat
                   </button>
                 </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {tab === "listings" && (
+          <>
+            {listings.length === 0 && <Empty text="İlan yok." />}
+            {listings.map((item) => {
+              const featured =
+                item.featured_until && new Date(item.featured_until) > new Date();
+              return (
+                <div key={item.id} className="card p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/ilan/goruntule?id=${item.id}`}
+                        className="line-clamp-1 text-sm font-semibold hover:text-accent"
+                      >
+                        {item.title}
+                      </Link>
+                      <p className="mt-0.5 text-[0.68rem] text-muted-2">
+                        @{profiles[item.seller_id]?.username ?? "satıcı"} ·{" "}
+                        {formatPrice(Number(item.price))} ·{" "}
+                        {new Date(item.created_at).toLocaleDateString("tr-TR")}
+                      </p>
+                    </div>
+                    <span
+                      className={`badge shrink-0 border text-[0.58rem] ${
+                        item.status === "active"
+                          ? "border-mint/30 bg-mint/10 text-mint"
+                          : "border-line bg-white/5 text-muted"
+                      }`}
+                    >
+                      {item.status === "active" ? "yayında" : item.status}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {[1, 3, 7].map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() =>
+                          adminListing(
+                            item.id,
+                            day === 1 ? "feature1" : day === 3 ? "feature3" : "feature7",
+                          )
+                        }
+                        disabled={busy === item.id}
+                        className="chip px-2 py-1 text-[0.65rem]"
+                      >
+                        {day} gün öne çıkar
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => adminListing(item.id, item.status === "active" ? "hide" : "active")}
+                      disabled={busy === item.id}
+                      className="chip px-2 py-1 text-[0.65rem]"
+                    >
+                      {item.status === "active" ? "Gizle" : "Yayına al"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adminListing(item.id, "delete")}
+                      disabled={busy === item.id}
+                      className="chip border-danger/40 bg-danger/10 px-2 py-1 text-[0.65rem] text-[#ffb3bb]"
+                    >
+                      Sil
+                    </button>
+                    {featured && (
+                      <span className="self-center text-[0.6rem] text-accent">
+                        öne çıkan · {new Date(item.featured_until!).toLocaleDateString("tr-TR")}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {tab === "members" && (
+          <>
+            <input
+              className="field"
+              value={memberQuery}
+              onChange={(event) => setMemberQuery(event.target.value)}
+              placeholder="Üye ara (kullanıcı adı)"
+            />
+            {members.length === 0 && <Empty text="Üye yok." />}
+            {members
+              .filter((member) =>
+                member.username
+                  .toLocaleLowerCase("tr")
+                  .includes(memberQuery.trim().toLocaleLowerCase("tr")),
+              )
+              .map((member) => (
+                <div key={member.id} className="card p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
+                        @{member.username}
+                        {member.verified_seller && <VerifiedTick size={13} />}
+                        {member.staff_tag && <StaffBadge tag={member.staff_tag} small />}
+                        {member.banned && (
+                          <span className="badge border border-danger/40 bg-danger/10 text-[0.55rem] text-danger">
+                            BANLI
+                          </span>
+                        )}
+                      </p>
+                      <p className="mt-0.5 truncate text-[0.68rem] text-muted-2">
+                        {member.email ?? "e-posta yok"} · {member.sales_count ?? 0} işlem ·{" "}
+                        {new Date(member.created_at).toLocaleDateString("tr-TR")}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/ilanlar?q=${encodeURIComponent(member.username)}`}
+                      className="shrink-0 text-[0.65rem] text-accent hover:underline"
+                    >
+                      İlanları
+                    </Link>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        tagMember(member.id, "verified_seller", Boolean(member.verified_seller))
+                      }
+                      disabled={busy === `${member.id}-verified_seller`}
+                      className="chip px-2 py-1 text-[0.65rem]"
+                    >
+                      {member.verified_seller ? "Onaylı satıcıyı kaldır" : "Onaylı Satıcı yap"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => tagMember(member.id, "vip", false)}
+                      disabled={busy === `${member.id}-vip`}
+                      className="chip px-2 py-1 text-[0.65rem]"
+                    >
+                      VIP ver
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => tagMember(member.id, "premium", false)}
+                      disabled={busy === `${member.id}-premium`}
+                      className="chip px-2 py-1 text-[0.65rem]"
+                    >
+                      Premium ver
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => adminMember(member.id, member.banned ? "unban" : "ban")}
+                      disabled={busy === member.id}
+                      className="chip px-2 py-1 text-[0.65rem]"
+                    >
+                      {member.banned ? "Banı kaldır" : "Banla"}
+                    </button>
+                    {role === "owner" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setMemberRole(member.id, "moderator")}
+                          disabled={busy === `${member.id}-role`}
+                          className="chip px-2 py-1 text-[0.65rem]"
+                        >
+                          Moderatör yap
+                        </button>
+                        {member.staff_tag === "moderator" && (
+                          <button
+                            type="button"
+                            onClick={() => adminMember(member.id, "demote")}
+                            disabled={busy === member.id}
+                            className="chip px-2 py-1 text-[0.65rem]"
+                          >
+                            Yetkiyi al
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => adminMember(member.id, "delete")}
+                          disabled={busy === member.id}
+                          className="chip border-danger/40 bg-danger/10 px-2 py-1 text-[0.65rem] text-[#ffb3bb]"
+                        >
+                          Hesabı sil
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </>
+        )}
+
+        {tab === "sales" && (
+          <>
+            {salesRows.length === 0 && <Empty text="Satış kaydı yok." />}
+            {salesRows.map((sale) => (
+              <div key={sale.id} className="card flex flex-wrap items-center gap-3 p-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">
+                    @{profiles[sale.seller_id]?.username ?? "satıcı"} →{" "}
+                    @{profiles[sale.buyer_id]?.username ?? "alıcı"}
+                  </p>
+                  <p className="text-[0.68rem] text-muted-2">
+                    {new Date(sale.created_at).toLocaleString("tr-TR")} · {sale.status}
+                  </p>
+                </div>
+                <Link
+                  href={`/ilan/goruntule?id=${sale.listing_id}`}
+                  className="text-[0.68rem] text-accent hover:underline"
+                >
+                  İlan
+                </Link>
+              </div>
+            ))}
+          </>
+        )}
+
+        {tab === "announcements" && (
+          <>
+            {announcements.length === 0 && <Empty text="Duyuru yok." />}
+            {announcements.map((announcement) => (
+              <div key={announcement.id} className="card p-4">
+                <p className="flex items-center justify-between gap-2 text-sm font-semibold">
+                  <span className="truncate">{announcement.title}</span>
+                  <span className="shrink-0 text-[0.62rem] text-muted-2">
+                    {new Date(announcement.created_at).toLocaleDateString("tr-TR")}
+                  </span>
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-[0.78rem] leading-relaxed text-muted">
+                  {announcement.body}
+                </p>
               </div>
             ))}
           </>

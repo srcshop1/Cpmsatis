@@ -7,6 +7,7 @@ export type AppUser = {
   salesCount?: number | null;
   reviewCount?: number | null;
   verifiedSeller?: boolean | null;
+  staffTag?: string | null;
   frame?: string | null;
   createdAt?: string;
 };

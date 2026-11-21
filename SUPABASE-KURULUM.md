@@ -16,6 +16,10 @@ taglar, duyurular, resim kovaları (storage) ve tüm yetki (RLS) kuralları.
 
 > Dosya baştan sona bir kez çalıştırılır. Tekrar çalıştırmak da güvenlidir.
 
+Ardından **`supabase/schema-v4.sql`** dosyasını da aynı yere yapıştırıp çalıştır:
+çoklu kategori, 15 günlük ilan süresi, yetkili etiketi, ban/işlem fonksiyonları ve
+profil fotoğrafı deposu izinleri bu dosyada.
+
 **Butonlar "Could not find the function ... in the schema cache" derse:** `supabase/onarim.sql`
 dosyasını aynı yerde çalıştır. Kısa onarım dosyasıdır, veri silmez.
 
