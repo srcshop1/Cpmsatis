@@ -35,7 +35,7 @@ export default function CreateListingPage() {
   const [images, setImages] = useState<PickedImage[]>([]);
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
-  const [category, setCategory] = useState(listingCategories[0].slug);
+  const [categories, setCategories] = useState<string[]>([]);
   const [wantsFeatured, setWantsFeatured] = useState(false);
   const [featuredDays, setFeaturedDays] = useState(3);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +91,10 @@ export default function CreateListingPage() {
       setError("En az 1 görsel eklemelisin.");
       return;
     }
+    if (categories.length === 0) {
+      setError("En az 1 kategori seçmelisin.");
+      return;
+    }
     const numericPrice = Number(price);
     if (!price || Number.isNaN(numericPrice) || numericPrice < 0) {
       setError("Geçerli bir fiyat gir.");
@@ -138,7 +142,8 @@ export default function CreateListingPage() {
           title: cleanTitle,
           description_html: descriptionHtml,
           price: Math.round(numericPrice),
-          category,
+          category: categories[0],
+          categories,
           images: uploadedUrls,
           status: "active",
           featured_requested: wantsFeatured,
@@ -337,22 +342,36 @@ export default function CreateListingPage() {
               </p>
             </div>
             <div>
-              <p className="mb-1.5 text-xs text-muted">Kategori</p>
+              <p className="mb-1.5 text-xs text-muted">
+                Kategori <span className="text-danger">*</span>
+              </p>
               <div className="flex flex-wrap gap-1.5">
-                {listingCategories.map((item) => (
-                  <button
-                    key={item.slug}
-                    type="button"
-                    onClick={() => setCategory(item.slug)}
-                    className={`chip px-2.5 py-1 text-[0.7rem] ${
-                      category === item.slug ? "chip-active" : ""
-                    }`}
-                  >
-                    <span aria-hidden>{item.icon}</span>
-                    {item.short}
-                  </button>
-                ))}
+                {listingCategories.map((item) => {
+                  const active = categories.includes(item.slug);
+                  return (
+                    <button
+                      key={item.slug}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() =>
+                        setCategories((prev) =>
+                          prev.includes(item.slug)
+                            ? prev.filter((slug) => slug !== item.slug)
+                            : [...prev, item.slug],
+                        )
+                      }
+                      className={`chip px-2.5 py-1 text-[0.7rem] ${active ? "chip-active" : ""}`}
+                    >
+                      <span aria-hidden>{item.icon}</span>
+                      {item.short}
+                      {active && <CheckIcon width={11} height={11} />}
+                    </button>
+                  );
+                })}
               </div>
+              <p className="mt-1 text-[0.64rem] text-muted-2">
+                En az 1 kategori zorunlu · birden fazla seçebilirsin
+              </p>
             </div>
           </div>
         </section>

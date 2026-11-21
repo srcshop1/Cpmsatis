@@ -17,23 +17,13 @@ import {
 } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { prepareAvatar, storageErrorMessage } from "@/lib/image";
 import { MAX_USERNAME_LENGTH, validateUsername } from "@/lib/validation";
 import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
 import { myStaffRole } from "@/lib/social";
+import { findFrame, frames, ownedFrames } from "@/lib/frames";
+import { StaffBadge, VerifiedBadge } from "@/components/user-badge";
 
-const frames = [
-  { slug: "owner", name: "Kurucu", tone: "from-[#ff9a3c] to-[#f26a00]", needs: "owner" },
-  { slug: "moderator", name: "Moderatör", tone: "from-[#6c8cff] to-[#3b4fd8]", needs: "moderator" },
-  { slug: "vip", name: "VIP", tone: "from-[#ffd166] to-[#ff8a1f]", needs: "vip" },
-  { slug: "premium", name: "Premium", tone: "from-[#c084fc] to-[#7c3aed]", needs: "premium" },
-  {
-    slug: "verified_seller",
-    name: "Onaylı Satıcı",
-    tone: "from-[#35d49a] to-[#0f9d6e]",
-    needs: "verified_seller",
-  },
-  { slug: "member", name: "Üye", tone: "from-[#3a4356] to-[#1b2130]", needs: "member" },
-];
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -63,6 +53,12 @@ export default function ProfilePage() {
   }, [user?.username]);
 
   useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 7000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
     if (!supabase || !user) return;
     let cancelled = false;
 
@@ -90,39 +86,55 @@ export default function ProfilePage() {
   }, [supabase, user]);
 
   async function uploadAvatar(file: File | undefined) {
-    if (!file || !supabase || !user) return;
-    if (file.size > 4 * 1024 * 1024) {
-      setNotice("Profil fotoğrafı en fazla 4 MB olabilir.");
+    if (!file) return;
+    if (!supabase || !user) {
+      setNotice("Önce giriş yapmalısın.");
       return;
     }
+
     setAvatarBusy(true);
     setNotice(null);
 
-    const extension = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-    const path = `${user.id}/avatar-${Date.now()}.${extension}`;
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(path, file, { upsert: true, cacheControl: "3600" });
+    try {
+      // Küçült + JPEG'e çevir (büyük fotoğraf / HEIC sorunlarını çözer)
+      const blob = await prepareAvatar(file, 512, 0.85);
 
-    if (uploadError) {
+      if (blob.size > 3 * 1024 * 1024) {
+        throw new Error("Fotoğraf hâlâ çok büyük. Daha küçük bir görsel dene.");
+      }
+
+      const path = `${user.id}/avatar-${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, blob, {
+          cacheControl: "3600",
+          contentType: "image/jpeg",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(storageErrorMessage(uploadError.message));
+      }
+
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: data.publicUrl })
+        .eq("id", user.id);
+
+      if (updateError) {
+        throw new Error(`Profil kaydedilemedi: ${updateError.message}`);
+      }
+
+      await refreshUser();
+      setNotice("Profil fotoğrafın güncellendi.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Fotoğraf yüklenemedi, tekrar dene.",
+      );
+    } finally {
       setAvatarBusy(false);
-      setNotice(`Fotoğraf yüklenemedi: ${uploadError.message}`);
-      return;
     }
-
-    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({ avatar_url: data.publicUrl })
-      .eq("id", user.id);
-
-    setAvatarBusy(false);
-    if (updateError) {
-      setNotice("Fotoğraf kaydedilemedi.");
-      return;
-    }
-    await refreshUser();
-    setNotice("Profil fotoğrafın güncellendi.");
   }
 
   async function equipFrame(slug: string) {
@@ -210,9 +222,9 @@ export default function ProfilePage() {
 
   if (!user) return null;
 
-  const owned = new Set<string>(["member", ...tags]);
-  if (role) owned.add(role);
-  const activeFrame = frames.find((frame) => frame.slug === (user.frame ?? "member")) ?? frames[5];
+  const owned = ownedFrames({ tags, staffTag: user.staffTag ?? role });
+  const activeFrame = findFrame(user.frame);
+  const staffTag = user.staffTag ?? role;
 
   return (
     <AppShell>
@@ -220,8 +232,18 @@ export default function ProfilePage() {
       <p className="mt-1 text-xs text-muted-2 sm:text-sm">Hesap bilgilerin ve görünümün</p>
 
       {notice && (
-        <div className="mt-3 rounded-xl border border-line bg-white/4 px-3.5 py-2.5 text-xs text-muted">
-          {notice}
+        <div className="fixed bottom-24 left-1/2 z-[80] w-[min(92vw,26rem)] -translate-x-1/2 rounded-xl border border-line bg-surface/95 px-4 py-3 text-center text-xs leading-relaxed text-text shadow-2xl backdrop-blur">
+          <div className="flex items-start gap-2">
+            <p className="flex-1 text-left">{notice}</p>
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              className="shrink-0 rounded-md px-1.5 text-muted-2 hover:text-text"
+              aria-label="Kapat"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
@@ -265,13 +287,10 @@ export default function ProfilePage() {
           </div>
 
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 truncate text-lg font-bold">
-              {user.username}
-              {user.verifiedSeller && (
-                <span className="text-mint" title="Onaylı Satıcı">
-                  <ShieldIcon width={16} height={16} />
-                </span>
-              )}
+            <p className="flex flex-wrap items-center gap-1.5 text-lg font-bold">
+              <span className="truncate">{user.username}</span>
+              {user.verifiedSeller && <VerifiedBadge small />}
+              {staffTag && <StaffBadge tag={staffTag} small />}
             </p>
             <p className="mt-0.5 truncate text-xs text-muted-2">{user.email}</p>
             <div className="mt-2 flex flex-wrap gap-1.5 text-[0.65rem]">
@@ -450,8 +469,14 @@ export default function ProfilePage() {
               <button
                 key={frame.slug}
                 type="button"
-                disabled={!unlocked || frameBusy === frame.slug}
-                onClick={() => equipFrame(frame.slug)}
+                disabled={frameBusy === frame.slug}
+                onClick={() => {
+                  if (!unlocked) {
+                    setNotice(`Bu çerçeve kilitli. ${frame.hint}.`);
+                    return;
+                  }
+                  void equipFrame(frame.slug);
+                }}
                 className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
                   isActive
                     ? "border-accent/60 bg-accent/10"
@@ -459,7 +484,7 @@ export default function ProfilePage() {
                       ? "border-line-soft bg-white/3 hover:border-line"
                       : "border-line-soft bg-white/2 opacity-45"
                 }`}
-                title={unlocked ? `${frame.name} çerçevesini seç` : "Bu çerçeveye sahip değilsin"}
+                title={unlocked ? `${frame.name} çerçevesini seç` : frame.hint}
               >
                 <span
                   className={`grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br ${frame.tone} p-[2px]`}

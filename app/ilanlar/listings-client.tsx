@@ -16,7 +16,7 @@ import {
   XIcon,
 } from "@/components/icons";
 import { MAX_LISTING_PRICE, listingCategories } from "@/lib/catalog";
-import { fetchListings, touchLastSeen, type Listing } from "@/lib/listings";
+import { expireListings, fetchListings, touchLastSeen, type Listing } from "@/lib/listings";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Filters = {
@@ -25,6 +25,7 @@ type Filters = {
   max: string;
   online: boolean;
   deals: boolean;
+  verified: boolean;
 };
 
 function readFilters(params: URLSearchParams): Filters {
@@ -39,6 +40,7 @@ function readFilters(params: URLSearchParams): Filters {
     max: params.get("max") ?? "",
     online: params.get("online") === "1",
     deals: params.get("deals") === "1",
+    verified: params.get("onayli") === "1",
   };
 }
 
@@ -60,7 +62,8 @@ export function ListingsClient() {
     (filters.min ? 1 : 0) +
     (filters.max ? 1 : 0) +
     (filters.online ? 1 : 0) +
-    (filters.deals ? 1 : 0);
+    (filters.deals ? 1 : 0) +
+    (filters.verified ? 1 : 0);
 
   const [search, setSearch] = useState(query);
   const [open, setOpen] = useState(false);
@@ -79,6 +82,9 @@ export function ListingsClient() {
     const parsed = readFilters(new URLSearchParams(filtersKey));
 
     const load = async () => {
+      // 15 günü dolan ilanları gizle
+      await expireListings(supabase);
+
       const { listings: rows, error } = await fetchListings(supabase, {
         query: (new URLSearchParams(filtersKey).get("q") ?? "").trim(),
         categories: parsed.categories,
@@ -86,6 +92,7 @@ export function ListingsClient() {
         max: parsed.max ? Number(parsed.max) : null,
         onlineOnly: parsed.online,
         deals10: parsed.deals,
+        verifiedOnly: parsed.verified,
       });
 
       if (cancelled) return;
@@ -121,6 +128,7 @@ export function ListingsClient() {
     if (nextFilters.max) params.set("max", nextFilters.max);
     if (nextFilters.online) params.set("online", "1");
     if (nextFilters.deals) params.set("deals", "1");
+    if (nextFilters.verified) params.set("onayli", "1");
     const queryString = params.toString();
     return `/ilanlar${queryString ? `?${queryString}` : ""}`;
   }
@@ -131,7 +139,14 @@ export function ListingsClient() {
   }
 
   function clearFilters() {
-    const empty: Filters = { categories: [], min: "", max: "", online: false, deals: false };
+    const empty: Filters = {
+      categories: [],
+      min: "",
+      max: "",
+      online: false,
+      deals: false,
+      verified: false,
+    };
     setDraft(empty);
     setOpen(false);
     router.push(buildQuery(empty, query));
@@ -426,6 +441,12 @@ export function ListingsClient() {
                   description="Şu an sitede aktif olan satıcılar"
                   checked={draft.online}
                   onChange={(checked) => setDraft((prev) => ({ ...prev, online: checked }))}
+                />
+                <ToggleRow
+                  label="Yalnızca Onaylı Satıcılar"
+                  description="Mavi tikli, onaydan geçmiş satıcılar"
+                  checked={draft.verified}
+                  onChange={(checked) => setDraft((prev) => ({ ...prev, verified: checked }))}
                 />
                 <ToggleRow
                   label="10+ başarılı işlem sahibi satıcı"

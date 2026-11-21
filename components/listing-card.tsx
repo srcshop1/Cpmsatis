@@ -2,12 +2,17 @@
 
 import Link from "next/link";
 import { CheckIcon, StarIcon } from "@/components/icons";
+import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
 import { categoryLabel, isFeatured, type Listing } from "@/lib/listings";
 import { formatPrice } from "@/lib/catalog";
 
 export function ListingCard({ listing }: { listing: Listing }) {
   const cover = listing.images?.[0];
   const seller = listing.seller;
+  const categories =
+    listing.categories && listing.categories.length > 0
+      ? listing.categories
+      : [listing.category];
 
   return (
     <Link
@@ -27,8 +32,20 @@ export function ListingCard({ listing }: { listing: Listing }) {
           <div className="grid h-full w-full place-items-center text-3xl text-muted-2">🖼️</div>
         )}
 
-        <span className="absolute left-2 top-2 badge border border-black/30 bg-black/60 text-[0.62rem] text-white backdrop-blur">
-          {categoryLabel(listing.category)}
+        <span className="absolute left-2 top-2 flex max-w-[75%] flex-wrap gap-1">
+          {categories.slice(0, 2).map((slug) => (
+            <span
+              key={slug}
+              className="badge border border-black/30 bg-black/65 text-[0.6rem] text-white backdrop-blur"
+            >
+              {categoryLabel(slug)}
+            </span>
+          ))}
+          {categories.length > 2 && (
+            <span className="badge border border-black/30 bg-black/65 text-[0.6rem] text-white backdrop-blur">
+              +{categories.length - 2}
+            </span>
+          )}
         </span>
 
         {isFeatured(listing) && (
@@ -46,15 +63,16 @@ export function ListingCard({ listing }: { listing: Listing }) {
         <p className="mt-2 text-[1rem] font-extrabold text-accent">{formatPrice(listing.price)}</p>
 
         <div className="mt-2 flex items-center gap-1.5 border-t border-line-soft/70 pt-2 text-[0.68rem] text-muted-2">
-          <span className="grid h-5 w-5 shrink-0 place-items-center overflow-hidden rounded-md bg-white/8 text-[0.58rem] font-bold text-muted">
-            {seller?.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={seller.avatar_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              (seller?.username ?? "?").charAt(0).toUpperCase()
-            )}
-          </span>
+          <FramedAvatar
+            src={seller?.avatar_url}
+            username={seller?.username}
+            frame={seller?.equipped_frame}
+            size={22}
+            rounded="rounded-md"
+          />
           <span className="truncate">@{seller?.username ?? "satıcı"}</span>
+          {seller?.verified_seller && <VerifiedTick size={12} />}
+          {seller?.staff_tag && <StaffBadge tag={seller.staff_tag} small />}
           <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-mint">
             <CheckIcon width={11} height={11} />
             {seller?.sales_count ?? 0} işlem

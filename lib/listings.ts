@@ -11,6 +11,8 @@ export type ListingSeller = {
   rating: number | null;
   review_count: number | null;
   verified_seller: boolean | null;
+  staff_tag: string | null;
+  equipped_frame: string | null;
   last_seen_at: string | null;
 };
 
@@ -19,6 +21,7 @@ export type Listing = {
   title: string;
   price: number;
   category: string;
+  categories: string[] | null;
   images: string[];
   featured_until: string | null;
   created_at: string;
@@ -33,13 +36,16 @@ export type ListingFilters = {
   max: number | null;
   onlineOnly: boolean;
   deals10: boolean;
+  verifiedOnly: boolean;
 };
 
 export const LISTINGS_TABLE = "listings";
+/** İlan yayında kalma süresi (gün) */
+export const LISTING_LIFETIME_DAYS = 15;
 export const LISTING_IMAGES_BUCKET = "listing-images";
 
 const LISTING_COLUMNS =
-  "id,title,price,category,images,featured_until,created_at,seller_id";
+  "id,title,price,category,categories,images,featured_until,created_at,seller_id";
 
 export function isFeatured(listing: Listing) {
   return Boolean(listing.featured_until && new Date(listing.featured_until) > new Date());
@@ -47,6 +53,37 @@ export function isFeatured(listing: Listing) {
 
 export function categoryLabel(slug: string) {
   return findCategory(slug)?.short ?? slug;
+}
+
+export function listingExpiresAt(createdAt: string) {
+  return new Date(new Date(createdAt).getTime() + LISTING_LIFETIME_DAYS * 86400000);
+}
+
+export function daysLeft(createdAt: string) {
+  const ms = listingExpiresAt(createdAt).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / 86400000));
+}
+
+export function isExpired(createdAt: string) {
+  return Date.now() > listingExpiresAt(createdAt).getTime();
+}
+
+/** Süresi dolan ilanları gizler (veritabanı fonksiyonu varsa) */
+export async function expireListings(supabase: SupabaseClient) {
+  await supabase.rpc("expire_listings");
+}
+
+/** Kendi ilanını 15 gün daha yayında tutar */
+export async function renewListing(supabase: SupabaseClient, listingId: string) {
+  const { error } = await supabase.rpc("renew_listing", { p_listing: listingId });
+  if (error) {
+    // fonksiyon yoksa doğrudan güncelle (RLS sahibine izin verir)
+    return supabase
+      .from(LISTINGS_TABLE)
+      .update({ created_at: new Date().toISOString(), status: "active" })
+      .eq("id", listingId);
+  }
+  return { error: null };
 }
 
 function isSellerOnline(seller: ListingSeller | null) {
@@ -68,28 +105,54 @@ export async function fetchListings(
     .limit(120);
 
   if (filters.categories.length > 0) {
-    request = request.in("category", filters.categories);
+    request = request.overlaps("categories", filters.categories);
   }
   if (filters.min !== null) request = request.gte("price", filters.min);
   if (filters.max !== null) request = request.lte("price", filters.max);
 
-  const { data, error } = await request;
+  let { data, error } = await request as { data: unknown[] | null; error: { message: string } | null };
+
+  // categories kolonu henüz yoksa eski tek kategori alanıyla devam et
+  if (error && /categories|column|schema cache/i.test(error.message)) {
+    let retry = supabase
+      .from(LISTINGS_TABLE)
+      .select("id,title,price,category,images,featured_until,created_at,seller_id")
+      .eq("status", "active")
+      .order("featured_until", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(120);
+    if (filters.categories.length > 0) retry = retry.in("category", filters.categories);
+    if (filters.min !== null) retry = retry.gte("price", filters.min);
+    if (filters.max !== null) retry = retry.lte("price", filters.max);
+    const second = await retry;
+    data = second.data as unknown[] | null;
+    error = second.error;
+  }
 
   if (error) {
     return { listings: [], error: error.message };
   }
 
-  const rows = (data ?? []) as Omit<Listing, "seller">[];
+  const rows = (data ?? []) as unknown as Omit<Listing, "seller">[];
   const sellerIds = Array.from(new Set(rows.map((row) => row.seller_id)));
 
   const sellers = new Map<string, ListingSeller>();
   if (sellerIds.length > 0) {
-    const { data: profileRows } = await supabase
+    const { data: profileRows, error: profileError } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url, sales_count, rating, review_count, verified_seller, last_seen_at")
+      .select("id, username, avatar_url, sales_count, rating, review_count, verified_seller, staff_tag, equipped_frame, last_seen_at")
       .in("id", sellerIds);
 
-    for (const profile of (profileRows ?? []) as ListingSeller[]) {
+    let rowsToUse = (profileRows ?? []) as unknown as ListingSeller[];
+    if (profileError) {
+      const retry = await supabase
+        .from("profiles")
+        .select("id, username, avatar_url, sales_count, rating, review_count, verified_seller, last_seen_at")
+        .in("id", sellerIds);
+      rowsToUse = (retry.data ?? []) as unknown as ListingSeller[];
+    }
+
+    for (const profile of rowsToUse) {
       sellers.set(profile.id, profile);
     }
   }
@@ -105,6 +168,8 @@ export async function fetchListings(
         );
         if (!haystack.includes(needle)) return false;
       }
+      if (isExpired(listing.created_at)) return false;
+      if (filters.verifiedOnly && !listing.seller?.verified_seller) return false;
       if (filters.onlineOnly && !isSellerOnline(listing.seller)) return false;
       if (filters.deals10 && (listing.seller?.sales_count ?? 0) < 10) return false;
       return true;

@@ -15,6 +15,7 @@ import {
   XIcon,
 } from "@/components/icons";
 import { formatPrice } from "@/lib/catalog";
+import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   REPORT_REASONS,
@@ -210,16 +211,19 @@ export function ChatClient() {
           </Link>
 
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
-            <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-accent-soft to-accent-deep text-xs font-extrabold text-ink">
-              {other?.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={other.avatar_url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                (other?.username ?? "?").charAt(0).toUpperCase()
-              )}
-            </span>
+            <FramedAvatar
+              src={other?.avatar_url}
+              username={other?.username}
+              frame={other?.equipped_frame}
+              size={36}
+              rounded="rounded-full"
+            />
             <div className="min-w-0">
-              <p className="truncate text-sm font-bold">@{other?.username ?? "kullanıcı"}</p>
+              <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold">
+                <span className="truncate">@{other?.username ?? "kullanıcı"}</span>
+                {other?.verified_seller && <VerifiedTick size={13} />}
+                {other?.staff_tag && <StaffBadge tag={other.staff_tag} small />}
+              </p>
               <p className="text-[0.65rem] text-muted-2">
                 {other?.sales_count ?? 0} başarılı işlem · {other?.rating ? `${Number(other.rating).toFixed(1)} ★` : "puan yok"}
               </p>

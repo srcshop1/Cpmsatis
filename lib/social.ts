@@ -10,6 +10,8 @@ export type ProfileMini = {
   rating: number | null;
   review_count: number | null;
   verified_seller: boolean | null;
+  staff_tag: string | null;
+  equipped_frame: string | null;
   last_seen_at: string | null;
 };
 
@@ -59,10 +61,19 @@ export async function loadProfileMini(
 ): Promise<Map<string, ProfileMini>> {
   const map = new Map<string, ProfileMini>();
   if (ids.length === 0) return map;
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, username, avatar_url, sales_count, rating, review_count, verified_seller, last_seen_at")
-    .in("id", ids);
+  const columns =
+    "id, username, avatar_url, sales_count, rating, review_count, verified_seller, staff_tag, equipped_frame, last_seen_at";
+
+  let { data, error } = await supabase.from("profiles").select(columns).in("id", ids);
+
+  // v4 kolonları yoksa temel alanlarla devam et
+  if (error) {
+    const retry = await supabase
+      .from("profiles")
+      .select("id, username, avatar_url, sales_count, rating, review_count, verified_seller, last_seen_at")
+      .in("id", ids);
+    data = retry.data as typeof data;
+  }
   for (const row of (data ?? []) as ProfileMini[]) map.set(row.id, row);
   return map;
 }
