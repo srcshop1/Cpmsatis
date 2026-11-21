@@ -267,10 +267,38 @@ export default function AdminPage() {
       p_tag: tagChoice,
       p_remove: remove,
     });
+
+    // Fonksiyon veritabanında yoksa (şema çalıştırılmamış) doğrudan tabloya yaz
+    if (error && /could not find the function|schema cache|does not exist/i.test(error.message)) {
+      const fallback = remove
+        ? await supabase.from("user_tags").delete().eq("user_id", profile.id).eq("tag", tagChoice)
+        : await supabase
+            .from("user_tags")
+            .insert({ user_id: profile.id, tag: tagChoice, granted_by: user?.id ?? null });
+
+      setBusy(null);
+      if (fallback.error) {
+        setNotice(
+          `Tag kaydedilemedi. Supabase → SQL Editor'de supabase/onarim.sql dosyasını çalıştır. (${fallback.error.message})`,
+        );
+        return;
+      }
+      if (tagChoice === "verified_seller") {
+        await supabase
+          .from("profiles")
+          .update({ verified_seller: !remove })
+          .eq("id", profile.id);
+      }
+      setNotice(
+        `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${tagChoice} (yedek yol kullanıldı)`,
+      );
+      return;
+    }
+
     setBusy(null);
     setNotice(
       error
-        ? error.message
+        ? `Hata: ${error.message} — Supabase → SQL Editor'de supabase/onarim.sql çalıştır.`
         : `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${tagChoice}`,
     );
   }
@@ -289,7 +317,11 @@ export default function AdminPage() {
       p_role: roleChoice,
     });
     setBusy(null);
-    setNotice(error ? error.message : `@${profile.username} artık ${roleChoice}.`);
+    setNotice(
+      error
+        ? `Hata: ${error.message} — Supabase → SQL Editor'de supabase/onarim.sql çalıştır.`
+        : `@${profile.username} artık ${roleChoice}.`,
+    );
   }
 
   async function publishAnnouncement() {

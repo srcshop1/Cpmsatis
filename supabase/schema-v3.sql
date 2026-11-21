@@ -272,7 +272,7 @@ begin
   select username into v_sender from public.profiles where id = new.sender_id;
   insert into public.notifications (user_id, kind, title, body, link)
   values (v_other, 'message', coalesce(v_sender,'Bir kullanıcı') || ' mesaj gönderdi',
-          left(new.body, 90), '/mesajlar/' || new.conversation_id);
+          left(new.body, 90), '/mesajlar/sohbet?id=' || new.conversation_id);
   return new;
 end; $$;
 
@@ -587,6 +587,9 @@ begin
   if not public.is_staff() then raise exception 'Yetkisiz'; end if;
   if p_remove then
     delete from public.user_tags where user_id = p_user and tag = p_tag;
+    if p_tag = 'verified_seller' then
+      update public.profiles set verified_seller = false where id = p_user;
+    end if;
   else
     insert into public.user_tags (user_id, tag, granted_by)
     values (p_user, p_tag, auth.uid()) on conflict (user_id, tag) do nothing;
@@ -607,4 +610,14 @@ begin
   on conflict (user_id) do update set role = p_role;
 end; $$;
 grant execute on function public.admin_set_role(uuid, text) to authenticated;
-```
+
+-- ---------- 19) ÖNBELLEK + DOĞRULAMA ----------
+-- Yeni fonksiyonların API'de hemen görünmesi için PostgREST şemasını yenile
+notify pgrst, 'reload schema';
+
+select proname as "fonksiyon", 'var' as "durum"
+from pg_proc
+where pronamespace = 'public'::regnamespace
+  and proname in ('my_staff_role','is_staff','email_for_username','notify','mark_sold',
+                  'buyer_confirm','approve_sale','resolve_sales','admin_set_tag','admin_set_role')
+order by 1;
