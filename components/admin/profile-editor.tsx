@@ -235,7 +235,13 @@ export function ProfileEditor() {
           <AdminReviewList
             sellerId={member.id}
             canClearAll
-            onChanged={() => void refresh(member.id)}
+            onChanged={(summary) => {
+              setMember((prev) =>
+                prev
+                  ? { ...prev, review_count: summary.remaining, rating: summary.average }
+                  : prev,
+              );
+            }}
           />
 
           {notice && <p className="text-[0.72rem] text-accent">{notice}</p>}

@@ -232,9 +232,16 @@ export function UserProfileClient() {
       return;
     }
     const next = reviews.filter((row) => row.id !== target.id);
+    const nextAverages = averageReviews(next);
     setReviews(next);
-    setAverages(averageReviews(next));
+    setAverages(nextAverages);
     setNotice("Değerlendirme kaldırıldı.");
+    // Yıldız/puan hemen düşsün (sunucu değeri gecikse bile)
+    setProfile({
+      ...profile,
+      review_count: next.length,
+      rating: next.length > 0 ? Math.round(nextAverages.overall * 100) / 100 : null,
+    });
     const { data } = await supabase
       .from("profiles")
       .select("rating, review_count")
@@ -249,8 +256,9 @@ export function UserProfileClient() {
     }
   }
 
+  // Puan, gerçekten listelenen değerlendirmeler varsa gösterilir
   const reviewCount = profile.review_count ?? 0;
-  const hasRating = reviewCount > 0 && Number(profile.rating ?? 0) > 0;
+  const hasRating = reviewCount > 0 && reviews.length > 0 && Number(profile.rating ?? 0) > 0;
 
   return (
     <AppShell>
