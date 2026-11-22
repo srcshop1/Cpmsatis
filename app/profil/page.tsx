@@ -32,6 +32,7 @@ import { myStaffRole } from "@/lib/social";
 import { findFrame, frames, ownedFrames } from "@/lib/frames";
 import { StaffBadge, VerifiedBadge } from "@/components/user-badge";
 import { InstallAppButton } from "@/components/pwa";
+import { DeleteAccountDialog } from "@/components/account/delete-account-dialog";
 
 
 export default function ProfilePage() {
@@ -57,6 +58,7 @@ export default function ProfilePage() {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [frameBusy, setFrameBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [replyId, setReplyId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replyBusy, setReplyBusy] = useState(false);
@@ -647,14 +649,28 @@ export default function ProfilePage() {
       <button
         type="button"
         onClick={handleSignOut}
-        className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-danger/30 bg-danger/8 text-sm font-semibold text-[#ffb3bb] transition hover:bg-danger/15"
+        className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-white/4 text-sm font-semibold text-text transition hover:border-accent/50 hover:text-accent"
       >
         <LogoutIcon width={16} height={16} /> Çıkış Yap
       </button>
 
-      <p className="mt-6 text-center text-[0.68rem] text-muted-2">
-        Hesap silme talebi için destek ekibine yazabilirsin.
-      </p>
+      <button
+        type="button"
+        onClick={() => setDeleteOpen(true)}
+        className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-danger/30 bg-danger/8 text-sm font-semibold text-[#ffb3bb] transition hover:bg-danger/15"
+      >
+        Hesabı sil
+      </button>
+
+      <DeleteAccountDialog
+        open={deleteOpen}
+        email={user.email}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => {
+          setDeleteOpen(false);
+          void signOut().then(() => router.replace("/"));
+        }}
+      />
     </AppShell>
   );
 }
