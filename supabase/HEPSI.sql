@@ -531,6 +531,7 @@ create table if not exists public.reports (
   status text not null default 'open' check (status in ('open','reviewed','closed')),
   created_at timestamptz not null default now()
 );
+alter table public.reports add column if not exists admin_note text;
 alter table public.reports enable row level security;
 
 drop policy if exists "Şikayet kendi veya yetkili" on public.reports;
@@ -1161,6 +1162,34 @@ begin
   end if;
 end $$;
 
+-- ---------- 5o) YETKİLİ: SOHBETİ TAMAMEN TEMİZLE ----------
+create or replace function public.admin_clear_conversation(p_conversation uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer := 0; v_a uuid; v_b uuid; v_by text;
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+
+  select user_a, user_b into v_a, v_b from public.conversations where id = p_conversation;
+  if v_a is null then raise exception 'Sohbet bulunamadı'; end if;
+
+  delete from public.messages where conversation_id = p_conversation;
+  get diagnostics v_count = row_count;
+
+  update public.conversations set last_message_at = now() where id = p_conversation;
+
+  select username into v_by from public.profiles where id = auth.uid();
+
+  perform public.notify(v_a, 'staff', 'Sohbet temizlendi',
+    coalesce(v_by, 'Yetkili') || ' bu sohbetin mesajlarını temizledi.', '/mesajlar');
+  if v_b is distinct from v_a then
+    perform public.notify(v_b, 'staff', 'Sohbet temizlendi',
+      coalesce(v_by, 'Yetkili') || ' bu sohbetin mesajlarını temizledi.', '/mesajlar');
+  end if;
+
+  return v_count;
+end; $$;
+grant execute on function public.admin_clear_conversation(uuid) to authenticated;
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 
@@ -1185,7 +1214,8 @@ where pronamespace = 'public'::regnamespace
                   'admin_set_frame','admin_set_banned','admin_delete_account','admin_feature_listing',
                   'admin_set_listing_status','admin_remove_role','expire_listings','renew_listing',
                   'admin_notify','is_blocked_between','reply_review','admin_delete_review',
-                  'admin_clear_reviews','admin_set_sales_count','admin_sync_sales_count','send_message')
+                  'admin_clear_reviews','admin_set_sales_count','admin_sync_sales_count','send_message',
+                  'admin_clear_conversation')
 union all
 select 'depo: ' || id, 'var' from storage.buckets where id in ('avatars','listing-images')
 order by 1;

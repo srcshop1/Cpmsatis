@@ -30,6 +30,7 @@ import {
   REPORT_REASONS,
   createReport,
   isConversationBlocked,
+  myStaffRole,
   isBlockedEitherWay,
   loadMessages,
   loadProfileMini,
@@ -108,6 +109,10 @@ export function ChatClient() {
   const [reportDetails, setReportDetails] = useState("");
   const [reportDone, setReportDone] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [staffRole, setStaffRole] = useState<string | null>(null);
+  const [clearAllOpen, setClearAllOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerLoading, setPickerLoading] = useState(false);
@@ -116,6 +121,18 @@ export function ChatClient() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  // Yetkili mi? (/mesajları temizle komutu yalnızca yetkililerde çalışır)
+  useEffect(() => {
+    if (!supabase || !user) return;
+    let alive = true;
+    void myStaffRole(supabase).then((value) => {
+      if (alive) setStaffRole(value);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [supabase, user]);
+
   const listRef = useRef<HTMLDivElement>(null);
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   const touchStart = useRef<{ id: string; x: number } | null>(null);
@@ -461,6 +478,46 @@ export function ChatClient() {
     setMenuOpen(false);
   }
 
+  /** Yetkili: sohbetin TÜM mesajlarını iki taraftan da siler */
+  async function clearAllMessages() {
+    if (!supabase || !conversation) return;
+    setClearing(true);
+    setInfo(null);
+    setError(null);
+
+    const { data, error: rpcError } = await supabase.rpc("admin_clear_conversation", {
+      p_conversation: conversation.id,
+    });
+
+    if (rpcError) {
+      // Fonksiyon yoksa kendi mesajlarını silmeyi dene
+      const fallback = await supabase
+        .from("messages")
+        .delete()
+        .eq("conversation_id", conversation.id);
+      setClearing(false);
+      setClearAllOpen(false);
+      setMenuOpen(false);
+      if (fallback.error) {
+        setError("Mesajlar temizlenemedi. Bu işlem yalnızca yetkililerde çalışır.");
+        return;
+      }
+      setMessages([]);
+      setInfo("Sohbetteki mesajlar temizlendi.");
+      return;
+    }
+
+    setClearing(false);
+    setClearAllOpen(false);
+    setMenuOpen(false);
+    setMessages([]);
+    setInfo(
+      Number(data) > 0
+        ? `Sohbet temizlendi · ${Number(data)} mesaj silindi.`
+        : "Bu sohbette silinecek mesaj yoktu.",
+    );
+  }
+
   async function submitReport() {
     if (!supabase || !user || !conversation) return;
     const result = await createReport(supabase, {
@@ -550,6 +607,18 @@ export function ChatClient() {
                   >
                     <TrashIcon width={15} height={15} /> Sohbeti temizle
                   </button>
+                  {staffRole && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setClearAllOpen(true);
+                      }}
+                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[0.78rem] text-[#ffb3bb] hover:bg-danger/10"
+                    >
+                      <TrashIcon width={15} height={15} /> Tüm mesajları temizle
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -725,6 +794,7 @@ export function ChatClient() {
         </div>
 
         {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+        {info && <p className="mt-2 text-xs text-accent">{info}</p>}
 
         {replyTo ? (
           <div className="mt-2 flex items-center gap-2 rounded-xl border border-line bg-white/4 px-3 py-2">
@@ -995,6 +1065,17 @@ export function ChatClient() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={clearAllOpen}
+        title="Sohbetin tüm mesajları silinsin mi?"
+        description="Bu sohbetteki bütün mesajlar iki taraftan da kalıcı olarak silinecek. Bu işlem geri alınamaz."
+        confirmLabel="Tümünü sil"
+        danger
+        busy={clearing}
+        onConfirm={clearAllMessages}
+        onCancel={() => setClearAllOpen(false)}
+      />
+
       <ConfirmDialog
         open={confirmClear}
         title="Sohbet temizlensin mi?"

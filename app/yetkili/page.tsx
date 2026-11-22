@@ -108,6 +108,7 @@ type Report = {
   reason: string;
   details: string | null;
   status: string;
+  admin_note?: string | null;
   created_at: string;
 };
 
@@ -193,6 +194,7 @@ export default function AdminPage() {
   const [featurePick, setFeaturePick] = useState<ListingRow | null>(null);
   const [stats, setStats] = useState<Record<string, number>>({});
   const [reviewMember, setReviewMember] = useState<MemberHit | null>(null);
+  const [closeReportTarget, setCloseReportTarget] = useState<Report | null>(null);
 
   const loadProfiles = useCallback(
     async (ids: string[]) => {
@@ -253,11 +255,24 @@ export default function AdminPage() {
     }
 
     if (tab === "reports") {
-      const { data } = await supabase
+      const columns =
+        "id, reporter_id, reported_id, conversation_id, reason, details, status, admin_note, created_at";
+      let { data, error } = await supabase
         .from("reports")
-        .select("id, reporter_id, reported_id, conversation_id, reason, details, status, created_at")
+        .select(columns)
         .order("created_at", { ascending: false })
         .limit(50);
+
+      // admin_note kolonu yoksa onsuz devam et
+      if (error) {
+        const retry = await supabase
+          .from("reports")
+          .select("id, reporter_id, reported_id, conversation_id, reason, details, status, created_at")
+          .order("created_at", { ascending: false })
+          .limit(50);
+        data = retry.data as typeof data;
+      }
+
       const rows = (data ?? []) as Report[];
       setReports(rows);
       await loadProfiles(
@@ -554,6 +569,53 @@ export default function AdminPage() {
 
     setBusy(null);
     setNotice(approve ? "İlan öne çıkarıldı." : "Talep reddedildi.");
+    await loadTab();
+  }
+
+  /** Bildiriyi yetkili notuyla kapatır ve bildirene sonuç bildirimi gönderir */
+  async function closeReport(report: Report, note: string) {
+    if (!supabase) return;
+    setBusy(report.id);
+    setNotice(null);
+
+    let { error } = await supabase
+      .from("reports")
+      .update({ status: "closed", admin_note: note || null })
+      .eq("id", report.id);
+
+    // admin_note kolonu yoksa sadece durumu kapat
+    if (error) {
+      const retry = await supabase
+        .from("reports")
+        .update({ status: "closed" })
+        .eq("id", report.id);
+      error = retry.error;
+    }
+
+    if (error) {
+      setBusy(null);
+      setCloseReportTarget(null);
+      setNotice("Bildiri kapatılamadı. Lütfen tekrar dene.");
+      return;
+    }
+
+    const notified = await sendNotification(
+      report.reporter_id,
+      "Bildiriniz Sonuçlandı; İşte Sonuçlar",
+      note
+        ? `Yetkili Mesajı:\n${note}`
+        : "Yetkili Mesajı:\nBildiriniz incelendi ve kapatıldı.",
+      "/bildirimler",
+      "report",
+    );
+
+    setBusy(null);
+    setCloseReportTarget(null);
+    setNotice(
+      notified
+        ? "Bildiri kapatıldı, bildirene sonuç bildirimi gönderildi."
+        : "Bildiri kapatıldı.",
+    );
     await loadTab();
   }
 
@@ -1210,12 +1272,18 @@ export default function AdminPage() {
                     </p>
                   </div>
                   <span className="badge shrink-0 border border-line bg-white/4 text-[0.6rem] text-muted">
-                    {report.status}
+                    {STATUS_LABELS[report.status] ?? report.status}
                   </span>
                 </div>
                 {report.details && (
                   <p className="mt-2 whitespace-pre-wrap text-[0.78rem] leading-relaxed text-muted">
                     {report.details}
+                  </p>
+                )}
+                {report.admin_note && (
+                  <p className="mt-2 whitespace-pre-wrap rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.72rem] leading-relaxed text-muted-2">
+                    <span className="font-semibold text-text">Yetkili mesajı: </span>
+                    {report.admin_note}
                   </p>
                 )}
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1227,22 +1295,26 @@ export default function AdminPage() {
                       Sohbeti incele
                     </Link>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => updateReport(report.id, "reviewed")}
-                    disabled={busy === report.id}
-                    className="btn btn-ghost h-8 px-3 text-[0.7rem]"
-                  >
-                    İncelendi
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateReport(report.id, "closed")}
-                    disabled={busy === report.id}
-                    className="btn btn-primary h-8 px-3 text-[0.7rem]"
-                  >
-                    Kapat
-                  </button>
+                  {report.status !== "closed" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => updateReport(report.id, "reviewed")}
+                        disabled={busy === report.id || report.status === "reviewed"}
+                        className="btn btn-ghost h-8 px-3 text-[0.7rem]"
+                      >
+                        {busy === report.id ? <Spinner /> : "İncelendi"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCloseReportTarget(report)}
+                        disabled={busy === report.id}
+                        className="btn btn-primary h-8 px-3 text-[0.7rem]"
+                      >
+                        Kapat
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -1814,6 +1886,24 @@ export default function AdminPage() {
           if (target) void closeApplication(target, choice === "approved", note);
         }}
         onCancel={() => setCloseApplicationTarget(null)}
+      />
+
+      <ReasonDialog
+        open={Boolean(closeReportTarget)}
+        title="Bildiriyi kapat"
+        description={
+          closeReportTarget
+            ? `@${profiles[closeReportTarget.reporter_id]?.username ?? "kullanıcı"} kişisine "Bildiriniz Sonuçlandı; İşte Sonuçlar" bildirimi gidecek.`
+            : undefined
+        }
+        confirmLabel="Kapat ve Gönder"
+        required
+        busy={Boolean(closeReportTarget && busy === closeReportTarget.id)}
+        onSubmit={({ note }) => {
+          const target = closeReportTarget;
+          if (target) void closeReport(target, note);
+        }}
+        onCancel={() => setCloseReportTarget(null)}
       />
 
       <ConfirmDialog
