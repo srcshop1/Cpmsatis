@@ -885,6 +885,37 @@ begin
 end; $$;
 grant execute on function public.admin_purge_orphan_accounts() to authenticated;
 
+-- ---------- 5y) KULLANICI KENDİ HESABINI SİLER ----------
+-- Şifre kontrolü uygulama tarafında yapılır; burada gerçek silme ve doğrulama var
+create or replace function public.delete_my_account()
+returns void language plpgsql security definer set search_path = public, auth as $$
+declare v_uid uuid := auth.uid();
+begin
+  if v_uid is null then raise exception 'Giriş yapmalısın'; end if;
+  if exists (select 1 from public.user_roles where user_id = v_uid and role = 'owner') then
+    raise exception 'Kurucu hesabı silinemez';
+  end if;
+
+  begin
+    delete from auth.users where id = v_uid;
+  exception when others then
+    null;
+  end;
+
+  delete from public.profiles where id = v_uid;
+
+  if exists (select 1 from public.profiles where id = v_uid) then
+    raise exception 'Hesap silinemedi';
+  end if;
+
+  if exists (select 1 from auth.users u where u.id = v_uid) then
+    insert into public.account_cleanup (user_id) values (v_uid)
+    on conflict (user_id) do nothing;
+  end if;
+end; $$;
+grant execute on function public.delete_my_account() to authenticated;
+
+
 -- Satış sayılırken ek sinyal: son 30 günde yeni hesaplardan gelen işlemler
 create or replace function public.settle_sale(p_sale uuid)
 returns void language plpgsql security definer set search_path = public as $$

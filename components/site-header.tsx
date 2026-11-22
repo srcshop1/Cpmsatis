@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
-import { BellIcon, HeartIcon, LogoutIcon, PlusIcon, SearchIcon } from "@/components/icons";
-import { Spinner } from "@/components/ui/spinner";
+import { BellIcon, HeartIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { Logo } from "@/components/logo";
 import { AnnouncementBar } from "@/components/announcement-bar";
 import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
@@ -13,9 +11,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { NOTIFICATION_EVENT } from "@/lib/social";
 
 export function SiteHeader() {
-  const router = useRouter();
-  const { user, loading, signOut } = useAuth();
-  const [pending, setPending] = useState(false);
+  const { user, loading } = useAuth();
   const [unread, setUnread] = useState(0);
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
@@ -53,14 +49,6 @@ export function SiteHeader() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [supabase, user]);
-
-  async function handleSignOut() {
-    setPending(true);
-    await signOut();
-    setPending(false);
-    router.replace("/");
-    router.refresh();
-  }
 
   return (
     <>
@@ -152,16 +140,6 @@ export function SiteHeader() {
                 )}
               </Link>
 
-              <button
-                type="button"
-                onClick={handleSignOut}
-                disabled={pending}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-line bg-white/3 text-muted transition hover:border-danger/50 hover:text-danger disabled:opacity-60"
-                aria-label="Çıkış yap"
-                title="Çıkış yap"
-              >
-                {pending ? <Spinner /> : <LogoutIcon width={17} height={17} />}
-              </button>
             </>
           ) : (
             <>
