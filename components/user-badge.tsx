@@ -52,9 +52,25 @@ export function TagBadge({ tag, small = false }: { tag: string; small?: boolean 
       label: "Premium",
       className: "border-[#c084fc]/40 bg-[#c084fc]/12 text-[#d8b4fe]",
     },
+    trusted: {
+      label: "Güvenilir",
+      className: "border-[#35d49a]/40 bg-[#35d49a]/12 text-[#8ff0c8]",
+    },
+    fast: {
+      label: "Hızlı Teslimat",
+      className: "border-[#38bdf8]/40 bg-[#38bdf8]/12 text-[#9adcff]",
+    },
+    support: {
+      label: "Destekçi",
+      className: "border-[#fb7185]/40 bg-[#fb7185]/12 text-[#ffb0ba]",
+    },
   };
-  const item = config[tag];
-  if (!item) return null;
+  const item =
+    config[tag] ?? {
+      // Panelden verilen özel rozetler: yazıldığı gibi gösterilir
+      label: tag,
+      className: "border-line bg-white/6 text-muted",
+    };
 
   return (
     <span

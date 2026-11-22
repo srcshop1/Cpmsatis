@@ -166,3 +166,23 @@ export async function loadMemberListings(
     .limit(60);
   return (data ?? []) as AdminListingRow[];
 }
+
+/** Şüpheli değerlendirmeyi onaylar veya şüpheliye alır. */
+export async function setReviewStatusAsStaff(
+  supabase: SupabaseClient,
+  reviewId: string,
+  status: "approved" | "pending",
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc("admin_set_review_status", {
+    p_review: reviewId,
+    p_status: status,
+  });
+  if (!error) return { error: null };
+
+  if (missingFunction(error.message)) {
+    const fallback = await supabase.from("reviews").update({ status }).eq("id", reviewId);
+    if (!fallback.error) return { error: null };
+  }
+
+  return { error: "Değerlendirme durumu değiştirilemedi." };
+}

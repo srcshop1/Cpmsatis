@@ -1522,6 +1522,178 @@ update public.listings set previous_price = null, price_dropped_at = null
    and not exists (select 1 from public.listing_discounts d where d.listing_id = listings.id);
 
 
+-- ---------- 5u) SAHTE DEĞERLENDİRME KORUMASI ----------
+alter table public.reviews add column if not exists status text not null default 'approved';
+alter table public.reviews add column if not exists flag_reason text;
+update public.reviews set status = 'approved' where status is null;
+
+-- Herkes yalnız onaylı değerlendirmeleri görür (şüpheliler yetkiliye görünür)
+drop policy if exists "Değerlendirmeler herkese açık" on public.reviews;
+create policy "Değerlendirmeler herkese açık" on public.reviews for select
+  using (status = 'approved' or buyer_id = auth.uid() or seller_id = auth.uid() or public.is_staff());
+
+-- Puanı yalnız onaylı değerlendirmelerden hesapla
+create or replace function public.recalc_seller_rating(p_user uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update public.profiles p set
+    rating = (select round(avg(r.overall)::numeric, 2) from public.reviews r
+               where r.seller_id = p_user and r.status = 'approved'),
+    review_count = (select count(*) from public.reviews r
+                     where r.seller_id = p_user and r.status = 'approved')
+  where p.id = p_user;
+end; $$;
+grant execute on function public.recalc_seller_rating(uuid) to authenticated;
+
+-- Değerlendirme yazılırken kontrol: onaylı satış, hesap yaşı, sıklık
+create or replace function public.guard_review()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_age interval;
+  v_pair integer;
+  v_day integer;
+  v_flags text[] := '{}';
+begin
+  if new.sale_id is null then
+    raise exception 'Değerlendirme için onaylanmış satış gerekir';
+  end if;
+
+  if not exists (
+    select 1 from public.sales s
+     where s.id = new.sale_id
+       and s.seller_id = new.seller_id
+       and s.buyer_id = new.buyer_id
+       and s.status = 'approved'
+  ) then
+    raise exception 'Sadece onaylanmış satıştan sonra değerlendirme yapılabilir';
+  end if;
+
+  select now() - created_at into v_age from public.profiles where id = new.buyer_id;
+  if v_age is null then raise exception 'Alıcı bulunamadı'; end if;
+  if v_age < interval '2 days' then
+    raise exception 'Hesabın 2 günlük olduktan sonra değerlendirme yapabilirsin';
+  end if;
+
+  select count(*) into v_pair from public.reviews
+   where buyer_id = new.buyer_id and seller_id = new.seller_id
+     and created_at > now() - interval '30 days';
+  if v_pair > 0 then
+    raise exception 'Aynı satıcıyı 30 günde yalnızca bir kez değerlendirebilirsin';
+  end if;
+
+  select count(*) into v_day from public.reviews
+   where buyer_id = new.buyer_id and created_at > now() - interval '1 day';
+  if v_day >= 5 then
+    raise exception 'Günde en fazla 5 değerlendirme yapabilirsin';
+  end if;
+
+  if v_age < interval '30 days' then
+    v_flags := array_append(v_flags, 'yeni hesap');
+  end if;
+  if exists (
+    select 1 from public.reviews r
+     where r.buyer_id = new.seller_id and r.seller_id = new.buyer_id
+       and r.created_at > now() - interval '30 days'
+  ) then
+    v_flags := array_append(v_flags, 'karşılıklı değerlendirme');
+  end if;
+  if (select count(*) from public.reviews r
+       where r.buyer_id = new.buyer_id and r.created_at > now() - interval '30 days') >= 6 then
+    v_flags := array_append(v_flags, 'çok sık değerlendirme');
+  end if;
+  if (select count(*) from public.sales s
+       where s.seller_id = new.seller_id and s.buyer_id = new.buyer_id
+         and s.status = 'approved') > 3 then
+    v_flags := array_append(v_flags, 'aynı çift çok işlem');
+  end if;
+
+  if array_length(v_flags, 1) > 0 then
+    new.status := 'pending';
+    new.flag_reason := array_to_string(v_flags, ', ');
+  end if;
+
+  return new;
+end; $$;
+
+drop trigger if exists reviews_guard on public.reviews;
+create trigger reviews_guard before insert on public.reviews
+for each row execute function public.guard_review();
+
+-- Ekleme / silme sonrası puanı yeniden hesapla
+create or replace function public.after_review_insert()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public.recalc_seller_rating(new.seller_id);
+
+  if new.status = 'approved' then
+    perform public.notify(new.seller_id, 'review', 'Yeni değerlendirme',
+      'Bir alıcı seni ' || new.overall || '/5 puanla değerlendirdi.', '/profil');
+  end if;
+  return new;
+end; $$;
+
+create or replace function public.after_review_delete()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public.recalc_seller_rating(old.seller_id);
+  return old;
+end; $$;
+
+-- Yetkili: şüpheli değerlendirmeyi onayla / şüpheliye al
+create or replace function public.admin_set_review_status(p_review uuid, p_status text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_seller uuid;
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+  if p_status not in ('approved', 'pending') then raise exception 'Geçersiz durum'; end if;
+
+  update public.reviews
+     set status = p_status,
+         flag_reason = case when p_status = 'approved' then null else flag_reason end
+   where id = p_review
+  returning seller_id into v_seller;
+
+  if v_seller is null then raise exception 'Değerlendirme bulunamadı'; end if;
+  perform public.recalc_seller_rating(v_seller);
+end; $$;
+grant execute on function public.admin_set_review_status(uuid, text) to authenticated;
+
+-- Yetkili kaldırma işlemleri de onaylı puanla çalışsın
+create or replace function public.admin_delete_review(p_review uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_seller uuid; v_by text;
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+
+  select seller_id into v_seller from public.reviews where id = p_review;
+  if v_seller is null then raise exception 'Değerlendirme bulunamadı'; end if;
+
+  delete from public.reviews where id = p_review;
+  perform public.recalc_seller_rating(v_seller);
+
+  select username into v_by from public.profiles where id = auth.uid();
+  perform public.notify(v_seller, 'review', 'Değerlendirme kaldırıldı',
+    coalesce(v_by, 'Yetkili') || ' bir değerlendirmeni kaldırdı.', '/profil');
+end; $$;
+
+create or replace function public.admin_clear_reviews(p_user uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer := 0;
+begin
+  if public.my_staff_role() is distinct from 'owner' then raise exception 'Yetkisiz'; end if;
+
+  delete from public.reviews where seller_id = p_user;
+  get diagnostics v_count = row_count;
+  perform public.recalc_seller_rating(p_user);
+
+  if v_count > 0 then
+    perform public.notify(p_user, 'review', 'Değerlendirmeler kaldırıldı',
+      'Profilindeki değerlendirmeler yetkili tarafından kaldırıldı.', '/profil');
+  end if;
+  return v_count;
+end; $$;
+
+
 -- ============================================================
 --  SON KONTROL — hepsi "var" görünmeli
 -- ============================================================
@@ -1546,7 +1718,8 @@ where pronamespace = 'public'::regnamespace
                   'admin_clear_reviews','admin_set_sales_count','admin_sync_sales_count','send_message',
                   'admin_clear_conversation','after_review_delete','increment_listing_view',
                   'toggle_listing_favorite','seller_response_minutes','my_discount_limit',
-                  'my_discount_usage','apply_listing_discount','cancel_listing_discount')
+                  'my_discount_usage','apply_listing_discount','cancel_listing_discount',
+                  'recalc_seller_rating','admin_set_review_status')
 union all
 select 'depo: ' || id, 'var' from storage.buckets where id in ('avatars','listing-images')
 order by 1;
