@@ -116,6 +116,12 @@ export function ListingDetailClient() {
   const isOwner = Boolean(user && listing && user.id === listing.seller_id);
 
   useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
     if (!supabase || !listingId) {
       setState("error");
       setError("İlan şu an yüklenemedi. Sayfayı yenileyip tekrar dene.");
@@ -422,6 +428,12 @@ export function ListingDetailClient() {
 
   return (
     <AppShell>
+      {notice && (
+        <div className="fixed bottom-24 left-1/2 z-[90] w-[min(92vw,24rem)] -translate-x-1/2 rounded-xl border border-line bg-surface/95 px-4 py-2.5 text-center text-xs leading-relaxed text-text shadow-2xl backdrop-blur">
+          {notice}
+        </div>
+      )}
+
       <Link
         href="/ilanlar"
         className="inline-flex items-center gap-1 text-xs font-medium text-muted-2 transition hover:text-text"
@@ -582,8 +594,7 @@ export function ListingDetailClient() {
               </span>
             </p>
 
-            {!isOwner && (
-              <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => void toggleFavorite()}
@@ -610,10 +621,9 @@ export function ListingDetailClient() {
                   className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-line bg-white/4 text-[0.75rem] font-semibold text-muted transition hover:text-text"
                 >
                   {copied ? <CheckIcon width={15} height={15} /> : <CopyIcon width={15} height={15} />}
-                  {copied ? "Kopyalandı" : "Link"}
-                </button>
-              </div>
-            )}
+                {copied ? "Kopyalandı" : "Link"}
+              </button>
+            </div>
           </div>
 
           <div className="card p-4">
@@ -683,11 +693,6 @@ export function ListingDetailClient() {
                   <StarIcon width={15} height={15} />
                   {featuredPending ? "Öne çıkarma talebi onay bekliyor" : "Öne Çıkarma Talebi Gönder"}
                 </button>
-                {notice && (
-                  <p className="rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.7rem] leading-relaxed text-muted">
-                    {notice}
-                  </p>
-                )}
                 <button
                   type="button"
                   onClick={renew}
@@ -875,8 +880,7 @@ export function ListingDetailClient() {
             </div>
           )}
 
-          {!isOwner && (
-            <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={shareOnWhatsApp}
@@ -890,10 +894,9 @@ export function ListingDetailClient() {
                 className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-line bg-white/4 text-[0.75rem] font-semibold text-muted transition hover:text-text"
               >
                 {copied ? <CheckIcon width={15} height={15} /> : <CopyIcon width={15} height={15} />}
-                {copied ? "Link kopyalandı" : "Linki kopyala"}
-              </button>
-            </div>
-          )}
+              {copied ? "Link kopyalandı" : "Linki kopyala"}
+            </button>
+          </div>
         </div>
       )}
 

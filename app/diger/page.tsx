@@ -9,6 +9,7 @@ import {
   CheckIcon,
   ChevronRightIcon,
   HeadsetIcon,
+  HeartIcon,
   MessageIcon,
   ShieldIcon,
   UsersIcon,
@@ -122,6 +123,24 @@ export default function MorePage() {
               </span>
             </span>
             <ArrowRightIcon width={16} height={16} className="text-accent" />
+          </Link>
+        )}
+
+        {user && (
+          <Link
+            href="/favoriler"
+            className="card card-hover flex items-center gap-3 p-3.5"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-black/25 text-[#ff9ba5]">
+              <HeartIcon width={19} height={19} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">Favorilerim</span>
+              <span className="mt-0.5 block text-[0.72rem] text-muted-2">
+                Kalp attığın ilanlar
+              </span>
+            </span>
+            <ChevronRightIcon width={16} height={16} className="shrink-0 text-muted-2" />
           </Link>
         )}
 

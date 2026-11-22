@@ -8,6 +8,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import {
   CheckIcon,
   ClockIcon,
+  HeartIcon,
   ImagePlusIcon,
   LogoutIcon,
   LockIcon,
@@ -281,6 +282,27 @@ export default function ProfilePage() {
     <AppShell>
       <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">Profil</h1>
       <p className="mt-1 text-xs text-muted-2 sm:text-sm">Hesap bilgilerin ve görünümün</p>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <Link
+          href="/favoriler"
+          className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-line bg-white/4 text-[0.72rem] font-semibold text-[#ff9ba5] transition hover:text-text"
+        >
+          <HeartIcon width={14} height={14} /> Favoriler
+        </Link>
+        <Link
+          href="/siparisler"
+          className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-line bg-white/4 text-[0.72rem] font-semibold text-muted transition hover:text-text"
+        >
+          <CheckIcon width={14} height={14} /> Siparişler
+        </Link>
+        <Link
+          href={`/satici?id=${user.id}`}
+          className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-line bg-white/4 text-[0.72rem] font-semibold text-muted transition hover:text-text"
+        >
+          <UserIcon width={14} height={14} /> Vitrinim
+        </Link>
+      </div>
 
       {notice && (
         <div className="fixed bottom-24 left-1/2 z-[80] w-[min(92vw,26rem)] -translate-x-1/2 rounded-xl border border-line bg-surface/95 px-4 py-3 text-center text-xs leading-relaxed text-text shadow-2xl backdrop-blur">
