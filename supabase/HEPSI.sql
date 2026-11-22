@@ -323,6 +323,25 @@ begin
   if v_seller is null or v_seller <> auth.uid() then raise exception 'Bu ilanın sahibi değilsin'; end if;
   if p_buyer = auth.uid() then raise exception 'Kendine satış yapamazsın'; end if;
 
+  -- Aynı alıcıyla kısa süre içinde tekrar satış bildirilemez
+  if exists (
+    select 1 from public.sales
+    where seller_id = v_seller
+      and buyer_id = p_buyer
+      and created_at > now() - interval '2 hours'
+  ) then
+    raise exception 'Bu kişi için satış bildirimi zaten yapıldı, biraz sonra tekrar dene';
+  end if;
+
+  -- Satış bildirimleri arasında kısa bir bekleme süresi var
+  if exists (
+    select 1 from public.sales
+    where seller_id = v_seller
+      and created_at > now() - interval '2 minutes'
+  ) then
+    raise exception 'Çok sık satış bildirimi yapılıyor, biraz sonra tekrar dene';
+  end if;
+
   insert into public.sales (listing_id, seller_id, buyer_id)
   values (p_listing, v_seller, p_buyer)
   returning id into v_sale;

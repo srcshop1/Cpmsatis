@@ -1,6 +1,7 @@
 "use client";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { PROFANITY_MESSAGE, hasProfanity } from "@/lib/profanity";
 
 export type ProfileMini = {
   id: string;
@@ -234,6 +235,7 @@ export async function sendMessage(
   const body = input.body.trim();
   if (!body) return { error: "Mesaj boş olamaz." };
   if (body.length > 4000) return { error: "Mesaj çok uzun." };
+  if (hasProfanity(body)) return { error: PROFANITY_MESSAGE };
 
   const payload = {
     conversation_id: input.conversationId,

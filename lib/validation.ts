@@ -1,3 +1,5 @@
+import { hasProfanity } from "@/lib/profanity";
+
 export const MIN_PASSWORD_LENGTH = 6;
 export const MIN_USERNAME_LENGTH = 3;
 export const MAX_USERNAME_LENGTH = 20;
@@ -18,6 +20,7 @@ export function validateUsername(raw: string): string | null {
     return `Kullanıcı adı en fazla ${MAX_USERNAME_LENGTH} karakter olabilir.`;
   if (!USERNAME_RE.test(value))
     return "Sadece harf, rakam, nokta, tire ve alt çizgi kullanabilirsin.";
+  if (hasProfanity(value)) return "Bu kullanıcı adı kullanılamaz.";
   return null;
 }
 

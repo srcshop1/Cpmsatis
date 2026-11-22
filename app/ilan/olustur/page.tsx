@@ -18,6 +18,7 @@ import {
   listingCategories,
 } from "@/lib/catalog";
 import { LISTINGS_TABLE, LISTING_IMAGES_BUCKET } from "@/lib/listings";
+import { PROFANITY_MESSAGE, hasProfanity } from "@/lib/profanity";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -100,7 +101,15 @@ export default function CreateListingPage() {
       setError(`Fiyat en fazla ${MAX_LISTING_PRICE.toLocaleString("tr-TR")} ₺ olabilir.`);
       return;
     }
+    if (hasProfanity(cleanTitle)) {
+      setError(PROFANITY_MESSAGE);
+      return;
+    }
     const descriptionHtml = sanitizeHtml(editorRef.current?.innerHTML ?? "");
+    if (hasProfanity(descriptionHtml)) {
+      setError(PROFANITY_MESSAGE);
+      return;
+    }
     if (!descriptionHtml || descriptionHtml.length < 10) {
       setError("Açıklama en az 10 karakter olmalı.");
       return;
