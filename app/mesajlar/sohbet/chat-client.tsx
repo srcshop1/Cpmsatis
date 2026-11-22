@@ -65,7 +65,7 @@ function ReadTicks({ read }: { read: boolean }) {
       viewBox="0 0 16 11"
       fill="none"
       aria-label={read ? "Okundu" : "İletildi"}
-      className={read ? "text-[#0b1a3a]" : "text-[#cfd8e6]"}
+      className={read ? "text-[#34d399]" : "text-[#cfd8e6]"}
     >
       <path
         d="M1 6.1L4.1 9.2L11.2 1.3"
