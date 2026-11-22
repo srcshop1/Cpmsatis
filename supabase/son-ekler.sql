@@ -955,6 +955,234 @@ begin
 end; $$;
 grant execute on function public.settle_sale(uuid) to authenticated;
 
+-- ---------- 5x) ASKIYA ALMA (SÜRELİ / KALICI) + ARD ARDA YENİ HESAP KURALI ----------
+alter table public.profiles add column if not exists banned_until timestamptz;
+alter table public.profiles add column if not exists ban_reason text;
+update public.profiles set banned_until = null where banned is false;
+
+-- Askı gerçekten etkin mi? (süresi dolmuşsa etkin değil)
+create or replace function public.ban_active(p_user uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select p.banned and (p.banned_until is null or p.banned_until > now())
+      from public.profiles p where p.id = p_user
+  ), false);
+$$;
+grant execute on function public.ban_active(uuid) to anon, authenticated;
+
+-- Süresi dolan askıları temizle
+create or replace function public.expire_bans()
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer := 0;
+begin
+  update public.profiles
+     set banned = false, banned_until = null, ban_reason = null
+   where banned and banned_until is not null and banned_until <= now();
+  get diagnostics v_count = row_count;
+  return v_count;
+end; $$;
+grant execute on function public.expire_bans() to authenticated;
+
+-- Askıya al: p_days null/0 ise kalıcı, değilse günlük
+create or replace function public.admin_set_banned(
+  p_user uuid,
+  p_banned boolean,
+  p_days integer default null,
+  p_reason text default null
+) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+  if p_user = auth.uid() then raise exception 'Kendini askıya alamazsın'; end if;
+  if (select role from public.user_roles where user_id = p_user) = 'owner' then
+    raise exception 'Kurucu askıya alınamaz';
+  end if;
+
+  if p_banned then
+    update public.profiles
+       set banned = true,
+           banned_until = case
+             when p_days is null or p_days <= 0 then null
+             else now() + make_interval(days => least(greatest(p_days, 1), 3650))
+           end,
+           ban_reason = p_reason
+     where id = p_user;
+
+    update public.listings set status = 'hidden'
+     where seller_id = p_user and status = 'active';
+  else
+    update public.profiles
+       set banned = false, banned_until = null, ban_reason = null
+     where id = p_user;
+  end if;
+end; $$;
+grant execute on function public.admin_set_banned(uuid, boolean, integer, text) to authenticated;
+
+-- Askıdaki kullanıcı ilan açamaz (süreli askı bitince otomatik açılır)
+create or replace function public.block_banned_listing()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.ban_active(new.seller_id) then
+    raise exception 'Hesabınız askıya alındığı için ilan oluşturamazsınız';
+  end if;
+  return new;
+end; $$;
+
+-- --- Değerlendirme kontrolü: ard arda yeni hesaplardan gelen 3 puan incelemeye düşer ---
+create or replace function public.guard_review()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_age interval;
+  v_pair integer;
+  v_day integer;
+  v_counted boolean;
+  v_young_streak integer := 0;
+  v_flags text[] := '{}';
+begin
+  if new.sale_id is null then
+    raise exception 'Değerlendirme için onaylanmış satış gerekir';
+  end if;
+
+  select s.counted into v_counted
+    from public.sales s
+   where s.id = new.sale_id
+     and s.seller_id = new.seller_id
+     and s.buyer_id = new.buyer_id
+     and s.status = 'approved';
+
+  if not found then
+    raise exception 'Sadece onaylanmış satıştan sonra değerlendirme yapılabilir';
+  end if;
+  if v_counted is false then
+    v_flags := array_append(v_flags, 'şüpheli işlem');
+  end if;
+
+  select now() - created_at into v_age from public.profiles where id = new.buyer_id;
+  if v_age is null then raise exception 'Alıcı bulunamadı'; end if;
+  if v_age < interval '2 days' then
+    raise exception 'Hesabın 2 günlük olduktan sonra değerlendirme yapabilirsin';
+  end if;
+
+  select count(*) into v_pair from public.reviews
+   where buyer_id = new.buyer_id and seller_id = new.seller_id
+     and created_at > now() - interval '30 days';
+  if v_pair > 0 then
+    raise exception 'Aynı satıcıyı 30 günde yalnızca bir kez değerlendirebilirsin';
+  end if;
+
+  select count(*) into v_day from public.reviews
+   where buyer_id = new.buyer_id and created_at > now() - interval '1 day';
+  if v_day >= 5 then
+    raise exception 'Günde en fazla 5 değerlendirme yapabilirsin';
+  end if;
+
+  -- Satıcının son 3 onaylı puanı da 30 günden genç hesaplardan mı?
+  select count(*) into v_young_streak from (
+    select (p.created_at > r.created_at - interval '30 days') as young
+      from public.reviews r
+      join public.profiles p on p.id = r.buyer_id
+     where r.seller_id = new.seller_id and r.status = 'approved'
+     order by r.created_at desc
+     limit 3
+  ) t where t.young;
+
+  if v_age < interval '30 days' then
+    v_flags := array_append(v_flags, 'yeni hesap');
+  end if;
+  if exists (
+    select 1 from public.reviews r
+     where r.buyer_id = new.seller_id and r.seller_id = new.buyer_id
+       and r.created_at > now() - interval '30 days'
+  ) then
+    v_flags := array_append(v_flags, 'karşılıklı değerlendirme');
+  end if;
+  if (select count(*) from public.reviews r
+       where r.buyer_id = new.buyer_id and r.created_at > now() - interval '30 days') >= 6 then
+    v_flags := array_append(v_flags, 'çok sık değerlendirme');
+  end if;
+  if v_young_streak >= 3 then
+    v_flags := array_append(v_flags, 'ard arda yeni hesaplardan puan');
+  end if;
+
+  if array_length(v_flags, 1) > 0 then
+    new.status := 'pending';
+    new.flag_reason := array_to_string(v_flags, ', ');
+  end if;
+
+  return new;
+end; $$;
+
+-- --- Satış kontrolü: ard arda 3 yeni hesap işlemi incelemeye düşer ---
+create or replace function public.settle_sale(p_sale uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_sale public.sales;
+  v_age interval;
+  v_pair integer;
+  v_day integer;
+  v_young_streak integer := 0;
+  v_flags text[] := '{}';
+  v_title text;
+begin
+  select * into v_sale from public.sales where id = p_sale;
+  if v_sale is null then raise exception 'Satış bulunamadı'; end if;
+  if v_sale.status = 'approved' then return; end if;
+
+  select now() - created_at into v_age from public.profiles where id = v_sale.buyer_id;
+
+  select count(*) into v_pair from public.sales
+   where seller_id = v_sale.seller_id and buyer_id = v_sale.buyer_id
+     and status = 'approved' and counted
+     and created_at > now() - interval '30 days';
+
+  select count(*) into v_day from public.sales
+   where seller_id = v_sale.seller_id and status = 'approved' and counted
+     and coalesce(approved_at, created_at) > now() - interval '1 day';
+
+  -- Satıcının son 3 sayılan işlemi de 30 günden genç hesaplardan mı?
+  select count(*) into v_young_streak from (
+    select (p.created_at > s.created_at - interval '30 days') as young
+      from public.sales s
+      join public.profiles p on p.id = s.buyer_id
+     where s.seller_id = v_sale.seller_id and s.status = 'approved' and s.counted
+     order by s.created_at desc
+     limit 3
+  ) t where t.young;
+
+  if v_age is not null and v_age < interval '7 days' then
+    v_flags := array_append(v_flags, 'alıcı hesabı yeni');
+  end if;
+  if v_pair >= 2 then
+    v_flags := array_append(v_flags, 'aynı çift çok işlem');
+  end if;
+  if v_day >= 8 then
+    v_flags := array_append(v_flags, 'günlük satış sınırı');
+  end if;
+  if v_young_streak >= 3 then
+    v_flags := array_append(v_flags, 'ard arda yeni hesap işlemi');
+  end if;
+
+  select title into v_title from public.listings where id = v_sale.listing_id;
+
+  update public.sales
+     set status = 'approved',
+         approved_at = now(),
+         counted = (coalesce(array_length(v_flags, 1), 0) = 0),
+         flag_reason = case when coalesce(array_length(v_flags, 1), 0) = 0 then null
+                            else array_to_string(v_flags, ', ') end
+   where id = p_sale;
+
+  perform public.recalc_sales_count(v_sale.seller_id);
+
+  perform public.notify(v_sale.seller_id, 'sale', 'Satış tamamlandı',
+    v_title || case when coalesce(array_length(v_flags, 1), 0) = 0
+                    then ' satışı onaylandı. Başarılı işlem sayın arttı.'
+                    else ' satışı onaylandı fakat incelemeye alındı.' end,
+    '/profil');
+  perform public.notify(v_sale.buyer_id, 'review', 'Siparişi değerlendir',
+    v_title || ' için satıcıyı değerlendir.', '/siparisler');
+end; $$;
+grant execute on function public.settle_sale(uuid) to authenticated;
+
 -- Önbelleği yenile
 notify pgrst, 'reload schema';
 
@@ -969,7 +1197,7 @@ where pronamespace = 'public'::regnamespace
                   'seller_response_minutes','my_discount_limit','my_discount_usage',
                   'apply_listing_discount','cancel_listing_discount','recalc_seller_rating',
                   'admin_set_review_status','settle_sale','recalc_sales_count',
-                  'admin_set_sale_counted','admin_purge_orphan_accounts')
+                  'admin_set_sale_counted','admin_purge_orphan_accounts','ban_active','expire_bans')
 order by 1;
 
 select 'kolon: listings.view_count/favorite_count' as kontrol,
@@ -1007,6 +1235,10 @@ select 'kolon: sales.counted' as kontrol,
 select 'tablo: account_cleanup' as kontrol,
        (select 'var' from information_schema.tables
          where table_schema = 'public' and table_name = 'account_cleanup') as durum;
+
+select 'kolon: profiles.banned_until' as kontrol,
+       (select 'var' from information_schema.columns
+         where table_schema = 'public' and table_name = 'profiles' and column_name = 'banned_until') as durum;
 
 select 'kolon: reports.admin_note' as kontrol,
        (select 'var' from information_schema.columns

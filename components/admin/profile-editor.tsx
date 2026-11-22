@@ -142,7 +142,7 @@ export function ProfileEditor() {
                 {member.verified_seller && <VerifiedTick size={12} />}
                 {member.banned && (
                   <span className="badge border border-danger/40 bg-danger/10 text-[0.55rem] text-danger">
-                    BANLI
+                    ASKIDA
                   </span>
                 )}
               </p>

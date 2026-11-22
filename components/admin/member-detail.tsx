@@ -21,6 +21,8 @@ type Profile = {
   staff_tag: string | null;
   equipped_frame: string | null;
   banned: boolean | null;
+  banned_until?: string | null;
+  ban_reason?: string | null;
   bio: string | null;
   last_seen_at: string | null;
   created_at: string;
@@ -303,7 +305,7 @@ export function MemberDetail({
                 {profile.staff_tag && <StaffBadge tag={profile.staff_tag} small />}
                 {profile.banned && (
                   <span className="badge border border-danger/40 bg-danger/10 text-[0.55rem] text-danger">
-                    BANLI
+                    {profile.banned_until ? "ASKIDA" : "KALICI ASKI"}
                   </span>
                 )}
               </p>
@@ -328,7 +330,21 @@ export function MemberDetail({
                   }
                 />
                 <Info label="Çerçeve" value={findFrame(profile.equipped_frame).name} />
-                <Info label="Durum" value={profile.banned ? "Kısıtlı" : "Aktif"} />
+                <Info
+                  label="Durum"
+                  value={
+                    !profile.banned
+                      ? "Aktif"
+                      : profile.banned_until
+                        ? `Askıda · ${Math.max(
+                            1,
+                            Math.ceil(
+                              (new Date(profile.banned_until).getTime() - Date.now()) / 86400000,
+                            ),
+                          )} gün`
+                        : "Askıda · kalıcı"
+                  }
+                />
               </div>
               {profile.bio && (
                 <p className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-black/25 p-2 text-[0.72rem] leading-relaxed text-muted">
