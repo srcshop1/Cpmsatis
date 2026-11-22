@@ -342,3 +342,52 @@ async function attachSellers(
   }
   return rows.map((row) => ({ ...row, seller: sellers.get(row.seller_id) ?? null }));
 }
+
+/** Kullanıcının favorilediği ilanlar (favori sırasına göre). */
+export async function loadFavoriteListings(
+  supabase: SupabaseClient,
+  userId: string,
+  limit = 60,
+): Promise<Listing[]> {
+  const { data, error } = await supabase
+    .from("listing_favorites")
+    .select("listing_id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data) return [];
+  const ids = (data as { listing_id: string }[]).map((row) => row.listing_id);
+  if (ids.length === 0) return [];
+
+  const { data: rows, error: rowsError } = await supabase
+    .from(LISTINGS_TABLE)
+    .select(LISTING_COLUMNS)
+    .in("id", ids);
+
+  if (rowsError || !rows) return [];
+
+  const listings = await attachSellers(
+    supabase,
+    rows as unknown as Omit<Listing, "seller">[],
+  );
+  const order = new Map(ids.map((id, index) => [id, index]));
+  return listings.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+}
+
+/** Favoriden çıkarır. */
+export async function removeFavorite(
+  supabase: SupabaseClient,
+  userId: string,
+  listingId: string,
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("listing_favorites")
+    .delete()
+    .eq("user_id", userId)
+    .eq("listing_id", listingId);
+  if (!error) return true;
+
+  const fallback = await toggleListingFavorite(supabase, userId, listingId);
+  return fallback.error === null;
+}

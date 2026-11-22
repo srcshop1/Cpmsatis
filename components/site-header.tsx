@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
-import { BellIcon, LogoutIcon, PlusIcon, SearchIcon } from "@/components/icons";
+import { BellIcon, HeartIcon, LogoutIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { Logo } from "@/components/logo";
 import { AnnouncementBar } from "@/components/announcement-bar";
@@ -106,6 +106,15 @@ export function SiteHeader() {
                 className="hidden items-center gap-1.5 rounded-xl bg-gradient-to-br from-accent-soft to-accent-deep px-3.5 py-2 text-sm font-bold text-ink transition hover:brightness-105 sm:flex"
               >
                 <PlusIcon width={16} height={16} strokeWidth={2.6} /> İlan Oluştur
+              </Link>
+
+              <Link
+                href="/favoriler"
+                className="hidden h-9 w-9 place-items-center rounded-xl border border-line bg-white/3 text-[#ff9ba5] transition hover:text-text sm:grid"
+                aria-label="Favorilerim"
+                title="Favorilerim"
+              >
+                <HeartIcon width={17} height={17} />
               </Link>
 
               <Link
