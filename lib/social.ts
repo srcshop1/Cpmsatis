@@ -228,6 +228,21 @@ export async function markMessagesRead(
     .is("read_at", null);
 }
 
+/** Kullanıcının tüm sohbetlerindeki okunmamış karşı mesajları okundu yapar. */
+export async function markAllConversationsRead(
+  supabase: SupabaseClient,
+  userId: string,
+  conversationIds: string[],
+) {
+  if (conversationIds.length === 0) return;
+  await supabase
+    .from("messages")
+    .update({ read_at: new Date().toISOString() })
+    .in("conversation_id", conversationIds)
+    .neq("sender_id", userId)
+    .is("read_at", null);
+}
+
 export async function sendMessage(
   supabase: SupabaseClient,
   input: {

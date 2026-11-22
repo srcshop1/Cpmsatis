@@ -20,7 +20,8 @@ import {
   TrashIcon,
   XIcon,
 } from "@/components/icons";
-import { formatPrice } from "@/lib/catalog";
+import { Price } from "@/components/price";
+import { formatPriceLabel } from "@/lib/catalog";
 import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { prepareAvatar, storageErrorMessage } from "@/lib/image";
@@ -324,7 +325,7 @@ export function ChatClient() {
     const result = await sendMessage(supabase, {
       conversationId: conversation.id,
       senderId: user.id,
-      body: `${item.title} — ${formatPrice(item.price)}`,
+      body: `${item.title} — ${formatPriceLabel(item.price)}`,
       listingRef: {
         id: item.id,
         title: item.title,
@@ -479,7 +480,7 @@ export function ChatClient() {
             )}
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[0.8rem] font-semibold">{listing.title}</span>
-              <span className="block text-[0.7rem] text-accent">{formatPrice(listing.price)}</span>
+              <span className="block text-[0.7rem] text-accent"><Price value={listing.price} iconSize={11} /></span>
             </span>
             <ChevronLeftIcon width={15} height={15} className="rotate-180 text-muted-2" />
           </Link>
@@ -600,7 +601,7 @@ export function ChatClient() {
                         </span>
                         {typeof ref.price === "number" && (
                           <span className="mt-1 block text-[0.72rem] font-bold">
-                            {formatPrice(ref.price)}
+                            <Price value={ref.price} iconSize={11} />
                           </span>
                         )}
                       </span>
@@ -793,7 +794,7 @@ export function ChatClient() {
                                 {row.title}
                               </span>
                               <span className="block text-[0.7rem] text-accent">
-                                {formatPrice(row.price)}
+                                <Price value={row.price} iconSize={11} />
                               </span>
                             </span>
                           </button>

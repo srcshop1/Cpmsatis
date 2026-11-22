@@ -22,7 +22,7 @@ import { frames as frameList } from "@/lib/frames";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { myStaffRole } from "@/lib/social";
 import { StaffBadge, VerifiedTick } from "@/components/user-badge";
-import { formatPrice } from "@/lib/catalog";
+import { Price } from "@/components/price";
 
 type Tab =
   | "tickets"
@@ -1077,7 +1077,7 @@ export default function AdminPage() {
                         </span>
                         <span className="block truncate text-[0.66rem] text-muted-2">
                           @{profiles[listing.seller_id]?.username ?? "satıcı"} ·{" "}
-                          {formatPrice(listing.price)}
+                          <Price value={listing.price} iconSize={11} />
                           {listing.featured_until
                             ? ` · öne çıkan: ${new Date(listing.featured_until).toLocaleDateString("tr-TR")}`
                             : ""}
@@ -1259,7 +1259,7 @@ export default function AdminPage() {
                       </Link>
                       <p className="mt-0.5 text-[0.68rem] text-muted-2">
                         @{profiles[item.seller_id]?.username ?? "satıcı"} ·{" "}
-                        {formatPrice(Number(item.price))} ·{" "}
+                        <Price value={Number(item.price)} iconSize={11} /> ·{" "}
                         {new Date(item.created_at).toLocaleDateString("tr-TR")}
                       </p>
                     </div>

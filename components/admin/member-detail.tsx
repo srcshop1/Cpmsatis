@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
-import { formatPrice } from "@/lib/catalog";
+import { Price } from "@/components/price";
 import { findFrame } from "@/lib/frames";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -246,7 +246,7 @@ export function MemberDetail({
                     {listing.title}
                   </Link>
                   <span className="shrink-0 text-[0.68rem] text-muted-2">
-                    {formatPrice(Number(listing.price))}
+                    <Price value={Number(listing.price)} iconSize={11} />
                   </span>
                   <span className="shrink-0 text-[0.6rem] text-muted-2">{listing.status}</span>
                 </div>
