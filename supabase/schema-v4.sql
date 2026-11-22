@@ -61,15 +61,28 @@ begin
 end; $$;
 grant execute on function public.admin_set_banned(uuid, boolean) to authenticated;
 
--- Hesabı sil (profil + ilanları + mesajları cascade ile gider)
+-- Hesabı sil (giriş hesabı + profil + ilanlar + mesajlar + tüm veriler)
 create or replace function public.admin_delete_account(p_user uuid)
-returns void language plpgsql security definer set search_path = public as $$
+returns void language plpgsql security definer set search_path = public, auth as $$
+declare v_role text;
 begin
-  if public.my_staff_role() <> 'owner' then raise exception 'Sadece kurucu silebilir'; end if;
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
   if p_user = auth.uid() then raise exception 'Kendi hesabını silemezsin'; end if;
-  if (select role from public.user_roles where user_id = p_user) = 'owner' then
-    raise exception 'Kurucu hesabı silinemez';
+
+  select role into v_role from public.user_roles where user_id = p_user;
+  if v_role = 'owner' then raise exception 'Kurucu hesabı silinemez'; end if;
+  if v_role = 'moderator' and public.my_staff_role() <> 'owner' then
+    raise exception 'Yetkili hesabını sadece kurucu silebilir';
   end if;
+
+  -- Giriş hesabını sil: profil ve tüm veriler cascade ile gider
+  begin
+    delete from auth.users where id = p_user;
+  exception when others then
+    null;
+  end;
+
+  -- Giriş hesabı silinemediyse en azından profili kaldır
   delete from public.profiles where id = p_user;
 end; $$;
 grant execute on function public.admin_delete_account(uuid) to authenticated;
@@ -552,6 +565,31 @@ begin
   return v_count;
 end; $$;
 grant execute on function public.admin_clear_conversation(uuid) to authenticated;
+
+-- ---------- 5p) DEĞERLENDİRME SİLİNİNCE PUAN DÜZELTME ----------
+create or replace function public.after_review_delete()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update public.profiles p set
+    rating = (select round(avg(r.overall)::numeric, 2) from public.reviews r where r.seller_id = old.seller_id),
+    review_count = (select count(*) from public.reviews r where r.seller_id = old.seller_id)
+  where p.id = old.seller_id;
+  return old;
+end; $$;
+
+drop trigger if exists reviews_after_delete on public.reviews;
+create trigger reviews_after_delete after delete on public.reviews
+for each row execute function public.after_review_delete();
+
+-- Mevcut kayıtları bir kez düzelt (puanı kalmış ama değerlendirmesi silinmiş profiller)
+update public.profiles p set
+  rating = (select round(avg(r.overall)::numeric, 2) from public.reviews r where r.seller_id = p.id),
+  review_count = (select count(*) from public.reviews r where r.seller_id = p.id)
+where coalesce(p.review_count, 0) <> (
+        select count(*) from public.reviews r where r.seller_id = p.id
+      )
+   or (select count(*) from public.reviews r where r.seller_id = p.id) = 0
+      and coalesce(p.rating, 0) <> 0;
 
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';

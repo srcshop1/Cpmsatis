@@ -1496,15 +1496,17 @@ export default function AdminPage() {
                             Yetkiyi al
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => setConfirmUser(member)}
-                          disabled={busy === member.id}
-                          className="chip border-danger/40 bg-danger/10 px-2 py-1 text-[0.65rem] text-[#ffb3bb]"
-                        >
-                          Hesabı sil
-                        </button>
                       </>
+                    )}
+                    {member.id !== user?.id && member.staff_tag !== "owner" && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmUser(member)}
+                        disabled={busy === member.id}
+                        className="chip border-danger/40 bg-danger/10 px-2 py-1 text-[0.65rem] text-[#ffb3bb]"
+                      >
+                        Hesabı sil
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1846,7 +1848,15 @@ export default function AdminPage() {
         )}
       </div>
       {detailUser && (
-        <MemberDetail userId={detailUser} onClose={() => setDetailUser(null)} />
+        <MemberDetail
+          userId={detailUser}
+          onClose={() => setDetailUser(null)}
+          onDeleted={() => {
+            setDetailUser(null);
+            setNotice("Hesap silindi.");
+            void loadTab();
+          }}
+        />
       )}
 
       <ReasonDialog
@@ -1937,7 +1947,7 @@ export default function AdminPage() {
         title="Hesap silinsin mi?"
         description={
           confirmUser
-            ? `@${confirmUser.username} ve tüm ilanları kalıcı olarak silinecek.`
+            ? `@${confirmUser.username} hesabı, ilanları, mesajları ve tüm kayıtları kalıcı olarak silinecek. Bu işlem geri alınamaz.`
             : undefined
         }
         confirmLabel="Hesabı Sil"

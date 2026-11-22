@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
 import { Price } from "@/components/price";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { deleteReviewAsStaff } from "@/lib/admin";
+import { deleteAccountAsStaff, deleteReviewAsStaff } from "@/lib/admin";
 import { findFrame } from "@/lib/frames";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -57,9 +57,11 @@ type Detail = {
 export function MemberDetail({
   userId,
   onClose,
+  onDeleted,
 }: {
   userId: string;
   onClose: () => void;
+  onDeleted?: () => void;
 }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -67,6 +69,8 @@ export function MemberDetail({
   const [removeReview, setRemoveReview] = useState<ReviewRow | null>(null);
   const [removing, setRemoving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!supabase) {
@@ -160,10 +164,37 @@ export function MemberDetail({
       setNotice(result.error);
       return;
     }
-    setDetail((prev) =>
-      prev ? { ...prev, reviews: prev.reviews.filter((row) => row.id !== target.id) } : prev,
-    );
+    setDetail((prev) => {
+      if (!prev) return prev;
+      const reviews = prev.reviews.filter((row) => row.id !== target.id);
+      const total = reviews.reduce((sum, row) => sum + Number(row.overall ?? 0), 0);
+      return {
+        ...prev,
+        reviews,
+        profile: prev.profile
+          ? {
+              ...prev.profile,
+              review_count: reviews.length,
+              rating: reviews.length > 0 ? Math.round((total / reviews.length) * 100) / 100 : null,
+            }
+          : prev.profile,
+      };
+    });
     setNotice("Değerlendirme kaldırıldı.");
+  }
+
+  async function deleteAccountNow() {
+    if (!supabase) return;
+    setDeleting(true);
+    setNotice(null);
+    const result = await deleteAccountAsStaff(supabase, userId);
+    setDeleting(false);
+    setConfirmDelete(false);
+    if (result.error) {
+      setNotice(result.error);
+      return;
+    }
+    onDeleted?.();
   }
 
   const profile = detail?.profile;
@@ -332,8 +363,18 @@ export function MemberDetail({
                   </button>
                 </div>
               ))}
-              {notice && <p className="mt-1.5 text-[0.66rem] text-accent">{notice}</p>}
             </Section>
+
+            {notice && <p className="text-[0.68rem] text-accent">{notice}</p>}
+
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleting}
+              className="w-full rounded-xl border border-danger/40 bg-danger/10 px-3 py-2.5 text-[0.75rem] font-semibold text-[#ffb3bb] hover:bg-danger/20 disabled:opacity-60"
+            >
+              Hesabı Sil
+            </button>
           </div>
         )}
       </div>
@@ -347,6 +388,21 @@ export function MemberDetail({
         busy={removing}
         onConfirm={deleteReviewNow}
         onCancel={() => setRemoveReview(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Hesap silinsin mi?"
+        description={
+          profile
+            ? `@${profile.username} hesabı, ilanları, mesajları ve tüm kayıtları kalıcı olarak silinecek. Bu işlem geri alınamaz.`
+            : undefined
+        }
+        confirmLabel="Hesabı Sil"
+        danger
+        busy={deleting}
+        onConfirm={() => void deleteAccountNow()}
+        onCancel={() => setConfirmDelete(false)}
       />
     </div>
   );

@@ -8,6 +8,13 @@ import { clearReviewsAsStaff, deleteReviewAsStaff } from "@/lib/admin";
 import { loadReviews, type Review } from "@/lib/sales";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
+/** Kalan değerlendirmelerin sayısı ve ortalaması */
+function summarize(rows: Review[]) {
+  if (rows.length === 0) return { remaining: 0, average: null as number | null };
+  const total = rows.reduce((sum, row) => sum + Number(row.overall ?? 0), 0);
+  return { remaining: rows.length, average: Math.round((total / rows.length) * 100) / 100 };
+}
+
 /** Bir kullanıcının aldığı değerlendirmeleri listeler, yetkili olarak kaldırmaya izin verir. */
 export function AdminReviewList({
   sellerId,
@@ -18,7 +25,7 @@ export function AdminReviewList({
   sellerId: string;
   canClearAll?: boolean;
   limit?: number;
-  onChanged?: () => void;
+  onChanged?: (summary: { remaining: number; average: number | null }) => void;
 }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -51,9 +58,10 @@ export function AdminReviewList({
       setNotice(error);
       return;
     }
-    setReviews((prev) => prev.filter((row) => row.id !== removeTarget.id));
+    const next = reviews.filter((row) => row.id !== removeTarget.id);
+    setReviews(next);
     setNotice("Değerlendirme kaldırıldı.");
-    onChanged?.();
+    onChanged?.(summarize(next));
   }
 
   async function clearAll() {
@@ -73,7 +81,7 @@ export function AdminReviewList({
         ? `${result.removed} değerlendirme kaldırıldı.`
         : "Kaldırılacak değerlendirme yok.",
     );
-    onChanged?.();
+    onChanged?.(summarize([]));
   }
 
   return (

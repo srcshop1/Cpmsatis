@@ -101,6 +101,26 @@ export async function syncMemberSalesCount(
   return { error: "Sayı hesaplanamadı.", value: null };
 }
 
+/** Hesabı (giriş hesabı + tüm veriler) kalıcı olarak siler. */
+export async function deleteAccountAsStaff(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc("admin_delete_account", { p_user: userId });
+  if (!error) return { error: null };
+
+  if (/kurucu|kendi hesab/i.test(error.message)) {
+    return { error: error.message };
+  }
+
+  if (missingFunction(error.message)) {
+    const fallback = await supabase.from("profiles").delete().eq("id", userId);
+    if (!fallback.error) return { error: null };
+  }
+
+  return { error: "Hesap silinemedi." };
+}
+
 /** İlanı kaldırır (yetkili). */
 export async function deleteListingAsStaff(
   supabase: SupabaseClient,
