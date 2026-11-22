@@ -403,15 +403,68 @@ export async function removeFavorite(
   return fallback.error === null;
 }
 
-/** Fiyatı düşmüş mü? (son 30 gün) */
-export function priceDrop(listing: { previous_price?: number | null; price: number; price_dropped_at?: string | null }) {
-  const prev = Number(listing.previous_price ?? 0);
-  if (!prev || prev <= listing.price) return null;
-  if (listing.price_dropped_at) {
-    const age = Date.now() - new Date(listing.price_dropped_at).getTime();
-    if (age > 30 * 86400000) return null;
+/** İlan indirimde mi? Orijinal fiyat + indirim oranı. */
+export function discountOf(listing: { previous_price?: number | null; price: number }) {
+  const original = Number(listing.previous_price ?? 0);
+  if (!original || original <= listing.price) return null;
+  const amount = original - listing.price;
+  const percent = Math.max(1, Math.round((amount / original) * 100));
+  return { original, amount, percent };
+}
+
+export type DiscountQuota = { limit: number; used: number; remaining: number | null };
+
+/** Bu ayki indirim hakkı (limit -1 ise sınırsız). */
+export async function loadDiscountQuota(
+  supabase: SupabaseClient,
+): Promise<DiscountQuota | null> {
+  const { data, error } = await supabase.rpc("my_discount_usage");
+  if (error || !data) return null;
+  const row = data as { limit?: number; used?: number; remaining?: number | null };
+  return {
+    limit: Number(row.limit ?? 0),
+    used: Number(row.used ?? 0),
+    remaining: row.remaining === null || row.remaining === undefined ? null : Number(row.remaining),
+  };
+}
+
+/** İndirim uygular, kalan hakkı döner. */
+export async function applyDiscount(
+  supabase: SupabaseClient,
+  listingId: string,
+  price: number,
+): Promise<{ quota: DiscountQuota | null; error: string | null }> {
+  const { data, error } = await supabase.rpc("apply_listing_discount", {
+    p_listing: listingId,
+    p_price: price,
+  });
+  if (error) {
+    const message = /hakkın doldu|doldu/i.test(error.message)
+      ? "Bu ayki indirim hakkın doldu."
+      : /küçük|düşük|eski fiyattan/i.test(error.message)
+        ? "İndirimli fiyat, mevcut fiyattan düşük olmalı."
+        : "İndirim uygulanamadı.";
+    return { quota: null, error: message };
   }
-  return { previous: prev, amount: prev - listing.price };
+  const row = data as { limit?: number; used?: number; remaining?: number | null };
+  return {
+    quota: {
+      limit: Number(row.limit ?? 0),
+      used: Number(row.used ?? 0),
+      remaining:
+        row.remaining === null || row.remaining === undefined ? null : Number(row.remaining),
+    },
+    error: null,
+  };
+}
+
+/** İndirimi geri alır (fiyat eski haline döner). */
+export async function cancelDiscount(
+  supabase: SupabaseClient,
+  listingId: string,
+): Promise<string | null> {
+  const { error } = await supabase.rpc("cancel_listing_discount", { p_listing: listingId });
+  return error ? "İndirim kaldırılamadı." : null;
 }
 
 /** Satıcının ortalama yanıt süresi (dakika). */
