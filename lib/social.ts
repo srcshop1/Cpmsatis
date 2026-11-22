@@ -182,18 +182,18 @@ export async function findOrCreateConversation(
   const { listingId, meId, otherId } = input;
   if (meId === otherId) return { conversationId: null, error: "Kendinle sohbet açamazsın." };
 
-  let lookup = supabase
-    .from("conversations")
-    .select("id")
-    .or(
-      `and(user_a.eq.${meId},user_b.eq.${otherId}),and(user_a.eq.${otherId},user_b.eq.${meId})`,
-    )
-    .order("created_at", { ascending: false })
-    .limit(1);
+  // Aynı iki kişi arasında her zaman tek sohbet olur (ilan fark etmez)
+  const lookupPair = async () =>
+    supabase
+      .from("conversations")
+      .select("id")
+      .or(
+        `and(user_a.eq.${meId},user_b.eq.${otherId}),and(user_a.eq.${otherId},user_b.eq.${meId})`,
+      )
+      .order("created_at", { ascending: true })
+      .limit(1);
 
-  if (listingId) lookup = lookup.eq("listing_id", listingId);
-
-  const { data: existing } = await lookup;
+  const { data: existing } = await lookupPair();
   if (existing && existing.length > 0) {
     return { conversationId: existing[0].id as string, error: null };
   }
@@ -204,8 +204,14 @@ export async function findOrCreateConversation(
     .select("id")
     .single();
 
-  if (error) return { conversationId: null, error: error.message };
-  return { conversationId: created.id as string, error: null };
+  if (!error) return { conversationId: created.id as string, error: null };
+
+  // Aynı anda iki taraftan açılırsa tekrar bak (çift sohbet oluşmasın)
+  const retry = await lookupPair();
+  if (retry.data && retry.data.length > 0) {
+    return { conversationId: retry.data[0].id as string, error: null };
+  }
+  return { conversationId: null, error: error.message };
 }
 
 /** Karşı tarafın mesajlarını okundu olarak işaretler */
@@ -391,7 +397,17 @@ export async function loadNotifications(
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(60);
-  return (data ?? []) as Notification[];
+
+  // Aynı bildirim birkaç kez düşmüşse listede tek göster
+  const seen = new Set<string>();
+  const rows: Notification[] = [];
+  for (const row of (data ?? []) as Notification[]) {
+    const key = `${row.kind}|${row.title}|${row.body ?? ""}|${row.link ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push(row);
+  }
+  return rows;
 }
 
 export async function markAllNotificationsRead(supabase: SupabaseClient, userId: string) {

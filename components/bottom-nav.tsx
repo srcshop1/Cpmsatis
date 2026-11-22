@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { GridIcon, MenuIcon, MessageIcon, PlusIcon } from "@/components/icons";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type NavItem = {
   href: string;
@@ -35,6 +37,46 @@ function UserAvatarIcon() {
 export function BottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  // Okunmamış DM sayısı (Mesajlar sekmesinde rozet)
+  useEffect(() => {
+    if (!supabase || !user) {
+      setUnreadMessages(0);
+      return;
+    }
+    let cancelled = false;
+
+    const load = async () => {
+      const { data: conversations } = await supabase
+        .from("conversations")
+        .select("id")
+        .or(`user_a.eq.${user.id},user_b.eq.${user.id}`);
+
+      const ids = ((conversations ?? []) as { id: string }[]).map((row) => row.id);
+      if (ids.length === 0) {
+        if (!cancelled) setUnreadMessages(0);
+        return;
+      }
+
+      const { count } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .in("conversation_id", ids)
+        .neq("sender_id", user.id)
+        .is("read_at", null);
+
+      if (!cancelled) setUnreadMessages(count ?? 0);
+    };
+
+    void load();
+    const timer = setInterval(() => void load(), 20000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [supabase, user, pathname]);
 
   const isActive = (href: string) =>
     href === "/ilanlar" ? pathname === "/ilanlar" : pathname.startsWith(href);
@@ -63,14 +105,27 @@ export function BottomNav() {
         </Link>
 
         {items.slice(2).map((item) => (
-          <NavButton key={item.href} item={item} active={isActive(item.href)} />
+          <NavButton
+            key={item.href}
+            item={item}
+            active={isActive(item.href)}
+            badge={item.href === "/mesajlar" ? unreadMessages : 0}
+          />
         ))}
       </div>
     </nav>
   );
 }
 
-function NavButton({ item, active }: { item: NavItem; active: boolean }) {
+function NavButton({
+  item,
+  active,
+  badge = 0,
+}: {
+  item: NavItem;
+  active: boolean;
+  badge?: number;
+}) {
   return (
     <Link
       href={item.href}
@@ -81,6 +136,11 @@ function NavButton({ item, active }: { item: NavItem; active: boolean }) {
     >
       <span className={`relative ${active ? "text-accent" : ""}`}>
         {item.icon({ width: 21, height: 21 })}
+        {badge > 0 && (
+          <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-[1rem] place-items-center rounded-full bg-danger px-1 text-[0.55rem] font-bold leading-none text-white">
+            {badge > 9 ? "9+" : badge}
+          </span>
+        )}
         {active && (
           <span className="absolute -bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent" />
         )}

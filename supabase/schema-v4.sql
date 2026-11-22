@@ -326,6 +326,55 @@ create policy "Mesaj gönderme" on public.messages for insert to authenticated
     )
   );
 
+-- ---------- 5h) TEK SOHBET + BİLDİRİM TEKRARINI ÖNLE ----------
+-- Aynı iki kişi arasındaki çift sohbetleri tek sohbete indir
+with ranked as (
+  select id,
+         first_value(id) over (
+           partition by least(user_a, user_b), greatest(user_a, user_b)
+           order by created_at, id
+         ) as keep_id
+  from public.conversations
+)
+update public.messages m
+   set conversation_id = r.keep_id
+  from ranked r
+ where m.conversation_id = r.id
+   and r.id <> r.keep_id;
+
+with ranked as (
+  select id,
+         first_value(id) over (
+           partition by least(user_a, user_b), greatest(user_a, user_b)
+           order by created_at, id
+         ) as keep_id
+  from public.conversations
+)
+delete from public.conversations c
+ using ranked r
+ where c.id = r.id
+   and r.id <> r.keep_id;
+
+create unique index if not exists conversations_pair_uniq
+  on public.conversations (least(user_a, user_b), greatest(user_a, user_b));
+
+-- Aynı bildirim 1 gün içinde ikinci kez eklenmesin
+create or replace function public.notify(p_user uuid, p_kind text, p_title text, p_body text, p_link text)
+returns void language sql security definer set search_path = public as $$
+  insert into public.notifications (user_id, kind, title, body, link)
+  select p_user, p_kind, p_title, p_body, p_link
+  where not exists (
+    select 1 from public.notifications n
+    where n.user_id = p_user
+      and n.kind = p_kind
+      and n.title is not distinct from p_title
+      and n.body is not distinct from p_body
+      and n.link is not distinct from p_link
+      and n.created_at > now() - interval '1 day'
+  );
+$$;
+revoke all on function public.notify(uuid,text,text,text,text) from public;
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 
