@@ -144,6 +144,14 @@ export async function loadConversations(
   });
 }
 
+function parseJson(value: string): Message["listing_ref"] {
+  try {
+    return JSON.parse(value) as Message["listing_ref"];
+  } catch {
+    return null;
+  }
+}
+
 export async function loadMessages(
   supabase: SupabaseClient,
   conversationId: string,
@@ -182,7 +190,7 @@ export async function loadMessages(
     ...message,
     listing_ref:
       typeof message.listing_ref === "string"
-        ? (JSON.parse(message.listing_ref) as Message["listing_ref"])
+        ? parseJson(message.listing_ref)
         : message.listing_ref,
   }));
 }
@@ -319,28 +327,54 @@ export async function sendMessage(
   if (body.length > 4000) return { error: "Mesaj çok uzun." };
   if (hasProfanity(body)) return { error: PROFANITY_MESSAGE };
 
-  const payload = {
+  const base = {
     conversation_id: input.conversationId,
     sender_id: input.senderId,
     body,
-    listing_ref: input.listingRef ?? null,
   };
+  const withListing = { ...base, listing_ref: input.listingRef ?? null };
 
-  let { error } = await supabase
-    .from("messages")
-    .insert({ ...payload, reply_to: input.replyTo ?? null });
+  // Kolonlar eksik olabileceği için sırayla dene (reply_to → listing_ref → sade)
+  const attempts = [
+    { ...withListing, reply_to: input.replyTo ?? null },
+    withListing,
+    base,
+  ];
 
-  // Yanıt kolonu yoksa alıntısız gönder
-  if (error) {
-    const retry = await supabase.from("messages").insert(payload);
-    error = retry.error;
+  let lastMessage: string | null = null;
+  let lastCode: string | null = null;
+
+  for (const payload of attempts) {
+    const { error } = await supabase.from("messages").insert(payload);
+    if (!error) return { error: null };
+
+    lastMessage = error.message;
+    lastCode = error.code ?? null;
+
+    // Sadece eksik kolon hatasında bir alt adıma in; yetki hatasında dur.
+    const missingColumn = /column .* does not exist|Could not find the .* column|PGRST204/i.test(
+      error.message,
+    );
+    if (!missingColumn) break;
   }
 
-  if (error) {
-    if (error.code === "42501") return { error: "Bu sohbete mesaj gönderemiyorsun." };
-    return { error: error.message };
+  // Doğrudan yazma engellendiyse sunucu tarafı fonksiyonla tekrar dene
+  const rpc = await supabase.rpc("send_message", {
+    p_conversation: input.conversationId,
+    p_body: body,
+    p_listing_ref: input.listingRef ?? null,
+    p_reply_to: input.replyTo ?? null,
+  });
+  if (!rpc.error) return { error: null };
+  lastMessage = rpc.error.message;
+  lastCode = rpc.error.code ?? lastCode;
+
+  if (lastCode === "42501" || /row-level security|permission denied/i.test(lastMessage ?? "")) {
+    return { error: "Bu sohbete mesaj gönderemiyorsun. Engelleme varsa kaldırıp tekrar dene." };
   }
-  return { error: null };
+
+  console.error("[mesaj gönderilemedi]", lastCode, lastMessage);
+  return { error: "Mesaj gönderilemedi. İnternetini kontrol edip tekrar dene." };
 }
 
 export async function saveConversationState(
