@@ -524,6 +524,7 @@ create table if not exists public.reports (
   status text not null default 'open' check (status in ('open','reviewed','closed')),
   created_at timestamptz not null default now()
 );
+alter table public.reports add column if not exists admin_note text;
 alter table public.reports enable row level security;
 
 drop policy if exists "Şikayet kendi veya yetkili" on public.reports;

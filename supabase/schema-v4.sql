@@ -518,6 +518,37 @@ begin
   end if;
 end $$;
 
+-- ---------- 5n) BİLDİRİ NOTU ----------
+alter table public.reports add column if not exists admin_note text;
+
+-- ---------- 5o) YETKİLİ: SOHBETİ TAMAMEN TEMİZLE ----------
+create or replace function public.admin_clear_conversation(p_conversation uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer := 0; v_a uuid; v_b uuid; v_by text;
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+
+  select user_a, user_b into v_a, v_b from public.conversations where id = p_conversation;
+  if v_a is null then raise exception 'Sohbet bulunamadı'; end if;
+
+  delete from public.messages where conversation_id = p_conversation;
+  get diagnostics v_count = row_count;
+
+  update public.conversations set last_message_at = now() where id = p_conversation;
+
+  select username into v_by from public.profiles where id = auth.uid();
+
+  perform public.notify(v_a, 'staff', 'Sohbet temizlendi',
+    coalesce(v_by, 'Yetkili') || ' bu sohbetin mesajlarını temizledi.', '/mesajlar');
+  if v_b is distinct from v_a then
+    perform public.notify(v_b, 'staff', 'Sohbet temizlendi',
+      coalesce(v_by, 'Yetkili') || ' bu sohbetin mesajlarını temizledi.', '/mesajlar');
+  end if;
+
+  return v_count;
+end; $$;
+grant execute on function public.admin_clear_conversation(uuid) to authenticated;
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 
