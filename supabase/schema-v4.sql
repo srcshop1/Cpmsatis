@@ -257,6 +257,31 @@ drop policy if exists "Öne çıkarma silme yetkili" on public.featured_requests
 create policy "Öne çıkarma silme yetkili" on public.featured_requests for delete to authenticated
   using (public.is_staff());
 
+-- ---------- 5e) MESAJ OKUNDU + PUAN DÜZELTME ----------
+alter table public.messages add column if not exists read_at timestamptz;
+
+drop policy if exists "Mesaj okundu işaretle" on public.messages;
+create policy "Mesaj okundu işaretle" on public.messages for update to authenticated
+  using (
+    sender_id <> auth.uid()
+    and exists (select 1 from public.conversations c
+                where c.id = conversation_id and (c.user_a = auth.uid() or c.user_b = auth.uid()))
+  )
+  with check (
+    sender_id <> auth.uid()
+    and exists (select 1 from public.conversations c
+                where c.id = conversation_id and (c.user_a = auth.uid() or c.user_b = auth.uid()))
+  );
+
+-- Değerlendirmesi olmayan kullanıcı 5 yıldız görünmesin
+alter table public.profiles alter column rating set default 0;
+update public.profiles p
+   set rating = coalesce(
+         (select round(avg(r.overall)::numeric, 2) from public.reviews r where r.seller_id = p.id),
+         0
+       ),
+       review_count = (select count(*) from public.reviews r where r.seller_id = p.id);
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 

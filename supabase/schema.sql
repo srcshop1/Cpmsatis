@@ -14,7 +14,7 @@ create table if not exists public.profiles (
   username text not null,
   email text,
   avatar_url text,
-  rating numeric(3, 2) default 5.00,
+  rating numeric(3, 2) default 0,
   sales_count integer default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

@@ -218,6 +218,7 @@ create table if not exists public.messages (
   sender_id uuid not null references public.profiles (id) on delete cascade,
   body text not null check (char_length(body) between 1 and 4000),
   listing_ref jsonb,
+  read_at timestamptz,
   created_at timestamptz not null default now()
 );
 create index if not exists messages_conversation_idx on public.messages (conversation_id, created_at);
@@ -261,18 +262,12 @@ drop policy if exists "Mesaj silme kendi" on public.messages;
 create policy "Mesaj silme kendi" on public.messages for delete to authenticated
   using (sender_id = auth.uid());
 
--- Mesaj gelince karşı tarafa bildirim
+-- Mesaj gelince sohbet sırası güncellenir (bildirim gönderilmez)
 create or replace function public.on_message_created() returns trigger
 language plpgsql security definer set search_path = public as $$
-declare v_other uuid; v_sender text;
 begin
-  select case when c.user_a = new.sender_id then c.user_b else c.user_a end
-    into v_other from public.conversations c where c.id = new.conversation_id;
+  -- Sadece sohbet sırasını günceller; mesajlar bildirim kutusuna düşmez
   update public.conversations set last_message_at = now() where id = new.conversation_id;
-  select username into v_sender from public.profiles where id = new.sender_id;
-  insert into public.notifications (user_id, kind, title, body, link)
-  values (v_other, 'message', coalesce(v_sender,'Bir kullanıcı') || ' mesaj gönderdi',
-          left(new.body, 90), '/mesajlar/sohbet?id=' || new.conversation_id);
   return new;
 end; $$;
 

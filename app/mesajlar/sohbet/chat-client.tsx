@@ -5,12 +5,17 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
+  BoxIcon,
   CheckIcon,
   ChevronLeftIcon,
+  ChevronRightIcon,
   FlagIcon,
+  ImagePlusIcon,
   MoreIcon,
+  PlusIcon,
   ShieldIcon,
   TrashIcon,
   XIcon,
@@ -18,12 +23,14 @@ import {
 import { formatPrice } from "@/lib/catalog";
 import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { prepareAvatar, storageErrorMessage } from "@/lib/image";
 import {
   REPORT_REASONS,
   createReport,
   isConversationBlocked,
   loadMessages,
   loadProfileMini,
+  markMessagesRead,
   saveConversationState,
   sendMessage,
   timeAgo,
@@ -39,6 +46,43 @@ type ConversationRow = {
 };
 
 type ListingRef = { title: string; price: number; image?: string } | null;
+
+type PickListing = {
+  id: string;
+  title: string;
+  price: number;
+  images: string[] | null;
+  seller_id: string;
+};
+
+/** WhatsApp benzeri küçük çift tik: okunduysa turuncu, okunmadıysa gri */
+function ReadTicks({ read }: { read: boolean }) {
+  return (
+    <svg
+      width="13"
+      height="9"
+      viewBox="0 0 16 11"
+      fill="none"
+      aria-label={read ? "Okundu" : "İletildi"}
+      className={read ? "text-accent" : "text-white/45"}
+    >
+      <path
+        d="M1 6.1L4.1 9.2L11.2 1.3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5.6 6.1L8.7 9.2L15.6 1.3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 export function ChatClient() {
   const searchParams = useSearchParams();
@@ -61,7 +105,13 @@ export function ChatClient() {
   const [reportDetails, setReportDetails] = useState("");
   const [reportDone, setReportDone] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerRows, setPickerRows] = useState<PickListing[]>([]);
+  const [uploading, setUploading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!supabase || !user || !conversationId) return;
@@ -112,6 +162,7 @@ export function ChatClient() {
         );
       }
 
+      await markMessagesRead(supabase, row.id, user.id);
       const rows = await loadMessages(supabase, row.id, cleared);
       if (!cancelled) {
         setMessages(rows);
@@ -129,6 +180,8 @@ export function ChatClient() {
   useEffect(() => {
     if (!supabase || !conversation) return;
     const timer = setInterval(async () => {
+      if (!user) return;
+      await markMessagesRead(supabase, conversation.id, user.id);
       const rows = await loadMessages(supabase, conversation.id, clearedAt);
       setMessages(rows);
       setBlocked(await isConversationBlocked(supabase, conversation.id));
@@ -158,6 +211,85 @@ export function ChatClient() {
       setError(result.error);
       return;
     }
+    setError(null);
+    setMessages(await loadMessages(supabase, conversation.id, clearedAt));
+  }
+
+  async function sendImage(file: File) {
+    if (!supabase || !user || !conversation) return;
+    if (blocked) {
+      setError("Bu sohbette engelleme var, mesaj gönderilemez.");
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const blob = await prepareAvatar(file, 1280, 0.82);
+      const path = `chat/${user.id}/${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("listing-images")
+        .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+      if (uploadError) {
+        setError(storageErrorMessage(uploadError.message));
+        return;
+      }
+      const { data: publicUrl } = supabase.storage.from("listing-images").getPublicUrl(path);
+      const result = await sendMessage(supabase, {
+        conversationId: conversation.id,
+        senderId: user.id,
+        body: "Görsel",
+        listingRef: { kind: "image", image: publicUrl.publicUrl, title: "Görsel" },
+      });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setMessages(await loadMessages(supabase, conversation.id, clearedAt));
+    } catch {
+      setError("Görsel gönderilemedi. Lütfen tekrar dene.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function openPicker() {
+    if (!supabase || !user) return;
+    setPlusOpen(false);
+    setPickerOpen(true);
+    setPickerLoading(true);
+    const ids = [user.id, other?.id].filter(Boolean) as string[];
+    const { data } = await supabase
+      .from("listings")
+      .select("id, title, price, images, seller_id")
+      .in("seller_id", ids)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(30);
+    setPickerRows((data ?? []) as PickListing[]);
+    setPickerLoading(false);
+  }
+
+  async function sendListing(item: PickListing) {
+    if (!supabase || !user || !conversation) return;
+    const result = await sendMessage(supabase, {
+      conversationId: conversation.id,
+      senderId: user.id,
+      body: `${item.title} — ${formatPrice(item.price)}`,
+      listingRef: {
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        image: item.images?.[0],
+        kind: "listing",
+      },
+    });
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setPickerOpen(false);
     setError(null);
     setMessages(await loadMessages(supabase, conversation.id, clearedAt));
   }
@@ -196,10 +328,6 @@ export function ChatClient() {
     setReportDone(true);
   }
 
-  const listingRef: ListingRef = listing
-    ? { title: listing.title, price: listing.price, image: listing.images?.[0] }
-    : null;
-
   return (
     <AppShell>
       <div className="mx-auto flex max-w-3xl flex-col">
@@ -212,7 +340,11 @@ export function ChatClient() {
             <ChevronLeftIcon width={17} height={17} />
           </Link>
 
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <Link
+            href={other?.id ? `/kullanici?id=${other.id}` : "/mesajlar"}
+            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl transition hover:opacity-85"
+            aria-label="Profili aç"
+          >
             <FramedAvatar
               src={other?.avatar_url}
               username={other?.username}
@@ -227,10 +359,14 @@ export function ChatClient() {
                 {other?.staff_tag && <StaffBadge tag={other.staff_tag} small />}
               </p>
               <p className="text-[0.65rem] text-muted-2">
-                {other?.sales_count ?? 0} başarılı işlem · {other?.rating ? `${Number(other.rating).toFixed(1)} ★` : "puan yok"}
+                {other?.sales_count ?? 0} başarılı işlem ·{" "}
+                {(other?.review_count ?? 0) > 0 && other?.rating
+                  ? `${Number(other.rating).toFixed(1)} ★`
+                  : "puan yok"}
               </p>
             </div>
-          </div>
+            <ChevronRightIcon width={15} height={15} className="shrink-0 text-muted-2" />
+          </Link>
 
           <div className="relative">
             <button
@@ -342,13 +478,26 @@ export function ChatClient() {
                       )}
                     </span>
                   )}
-                  <span className="whitespace-pre-wrap break-words">{message.body}</span>
+                  {ref?.kind === "image" && ref.image ? (
+                    <a href={ref.image} target="_blank" rel="noreferrer" className="block">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={ref.image}
+                        alt="Görsel"
+                        className="max-h-64 w-full rounded-lg object-cover"
+                        loading="lazy"
+                      />
+                    </a>
+                  ) : (
+                    <span className="whitespace-pre-wrap break-words">{message.body}</span>
+                  )}
                   <span
-                    className={`mt-1 block text-right text-[0.58rem] ${
-                      mine ? "text-black/50" : "text-muted-2"
+                    className={`float-right ml-1.5 mt-1 inline-flex items-center gap-1 rounded-full px-1 text-[0.52rem] leading-none ${
+                      mine ? "bg-black/25 text-white/65" : "text-muted-2"
                     }`}
                   >
                     {timeAgo(message.created_at)}
+                    {mine && <ReadTicks read={Boolean(message.read_at)} />}
                   </span>
                 </div>
               </div>
@@ -359,7 +508,42 @@ export function ChatClient() {
 
         {error && <p className="mt-2 text-xs text-danger">{error}</p>}
 
+        {plusOpen && (
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPlusOpen(false);
+                fileRef.current?.click();
+              }}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-line bg-white/4 py-2.5 text-[0.75rem] font-semibold text-text transition hover:border-accent/50"
+            >
+              <ImagePlusIcon width={16} height={16} /> Görsel Gönder
+            </button>
+            <button
+              type="button"
+              onClick={openPicker}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-line bg-white/4 py-2.5 text-[0.75rem] font-semibold text-text transition hover:border-accent/50"
+            >
+              <BoxIcon width={16} height={16} /> İlan Gönder
+            </button>
+          </div>
+        )}
+
         <div className="mt-2 flex items-end gap-2 pb-2">
+          <button
+            type="button"
+            onClick={() => setPlusOpen((prev) => !prev)}
+            disabled={blocked || uploading}
+            aria-label="Görsel veya ilan gönder"
+            className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${
+              plusOpen
+                ? "border-accent/60 bg-accent/15 text-accent"
+                : "border-line bg-white/4 text-muted hover:text-text"
+            }`}
+          >
+            {uploading ? <Spinner /> : <PlusIcon width={18} height={18} />}
+          </button>
           <textarea
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -385,20 +569,97 @@ export function ChatClient() {
           </button>
         </div>
 
-        {listingRef && (
+      </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void sendImage(file);
+        }}
+      />
+
+      {pickerOpen && (
+        <div className="fixed inset-0 z-[75] flex items-end justify-center sm:items-center">
           <button
             type="button"
-            onClick={() => {
-              setDraft(
-                `Şu ilanla ilgileniyorum;\n${listingRef.title} — ${formatPrice(listingRef.price)}`,
-              );
-            }}
-            className="mb-3 self-start rounded-lg border border-line bg-white/3 px-2.5 py-1.5 text-[0.68rem] text-muted transition hover:text-text"
-          >
-            İlan bilgisini mesaja ekle
-          </button>
-        )}
-      </div>
+            className="absolute inset-0 bg-black/65 backdrop-blur-sm"
+            onClick={() => setPickerOpen(false)}
+            aria-label="Kapat"
+          />
+          <div className="animate-pop relative flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-line bg-surface sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-line-soft px-4 py-3">
+              <h2 className="text-sm font-bold">İlan gönder</h2>
+              <button
+                type="button"
+                onClick={() => setPickerOpen(false)}
+                className="grid h-8 w-8 place-items-center rounded-lg text-muted-2 hover:bg-white/5 hover:text-text"
+                aria-label="Kapat"
+              >
+                <XIcon width={16} height={16} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {pickerLoading && <p className="py-8 text-center text-xs text-muted-2">Yükleniyor…</p>}
+
+              {!pickerLoading && pickerRows.length === 0 && (
+                <p className="py-8 text-center text-xs text-muted-2">Yayında ilan bulunamadı.</p>
+              )}
+
+              {!pickerLoading &&
+                (["mine", "theirs"] as const).map((group) => {
+                  const rows = pickerRows.filter((row) =>
+                    group === "mine" ? row.seller_id === user?.id : row.seller_id !== user?.id,
+                  );
+                  if (rows.length === 0) return null;
+                  return (
+                    <div key={group} className="mb-3">
+                      <p className="mb-1.5 px-1 text-[0.65rem] font-bold uppercase tracking-wide text-muted-2">
+                        {group === "mine" ? "Senin ilanların" : "Karşı tarafın ilanları"}
+                      </p>
+                      <div className="space-y-1.5">
+                        {rows.map((row) => (
+                          <button
+                            key={row.id}
+                            type="button"
+                            onClick={() => void sendListing(row)}
+                            className="flex w-full items-center gap-2.5 rounded-xl border border-line bg-white/4 p-2 text-left transition hover:border-accent/50"
+                          >
+                            {row.images?.[0] ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={row.images[0]}
+                                alt=""
+                                className="h-11 w-11 shrink-0 rounded-lg object-cover"
+                              />
+                            ) : (
+                              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-black/30">
+                                🖼️
+                              </span>
+                            )}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[0.78rem] font-semibold">
+                                {row.title}
+                              </span>
+                              <span className="block text-[0.7rem] text-accent">
+                                {formatPrice(row.price)}
+                              </span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {reportOpen && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
