@@ -202,7 +202,18 @@ export function ChatClient() {
           await markMessagesRead(supabase, conversation.id, user.id);
         }
         const rows = await loadMessages(supabase, conversation.id, clearedAt);
-        setMessages((prev) => (rows.length === 0 && prev.length > 0 ? prev : rows));
+        setMessages((prev) => {
+          if (rows.length === 0) return prev;
+          // Henüz sunucudan gelmemiş yerel (optimistik) mesajları koru
+          const pending = prev.filter(
+            (message) =>
+              message.id.startsWith("local-") &&
+              !rows.some(
+                (row) => row.sender_id === message.sender_id && row.body === message.body,
+              ),
+          );
+          return pending.length > 0 ? [...rows, ...pending] : rows;
+        });
         setBlocked(await isConversationBlocked(supabase, conversation.id));
       } catch {
         // Sessizce bekle; bir sonraki turda tekrar dener
@@ -309,7 +320,11 @@ export function ChatClient() {
     };
     setMessages((prev) => [...prev, optimistic]);
     const rows = await loadMessages(supabase, conv.id, clearedAt);
-    if (rows.length > 0) setMessages(rows);
+    if (rows.length === 0) return;
+    const arrived = rows.some(
+      (row) => row.sender_id === user.id && row.body === body,
+    );
+    setMessages(arrived ? rows : [...rows, optimistic]);
   }
 
   function jumpToMessage(id?: string) {
