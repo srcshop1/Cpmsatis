@@ -16,14 +16,17 @@ import {
   XIcon,
 } from "@/components/icons";
 import { ListingCard } from "@/components/listing-card";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FramedAvatar, StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Listing } from "@/lib/listings";
 import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
+import { deleteReviewAsStaff } from "@/lib/admin";
 import {
   REPORT_REASONS,
   createReport,
   isUserBlocked,
+  myStaffRole,
   setUserBlock,
 } from "@/lib/social";
 
@@ -66,6 +69,20 @@ export function UserProfileClient() {
   const [reportDetails, setReportDetails] = useState("");
   const [reportDone, setReportDone] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [staffRole, setStaffRole] = useState<string | null>(null);
+  const [removeReview, setRemoveReview] = useState<Review | null>(null);
+  const [removing, setRemoving] = useState(false);
+
+  useEffect(() => {
+    if (!supabase || !user) return;
+    let alive = true;
+    void myStaffRole(supabase).then((value) => {
+      if (alive) setStaffRole(value);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [supabase, user]);
 
   useEffect(() => {
     if (!supabase || !userId) {
@@ -201,6 +218,35 @@ export function UserProfileClient() {
         </div>
       </AppShell>
     );
+  }
+
+  async function removeReviewNow() {
+    if (!supabase || !removeReview || !profile) return;
+    setRemoving(true);
+    const target = removeReview;
+    const result = await deleteReviewAsStaff(supabase, target.id);
+    setRemoving(false);
+    setRemoveReview(null);
+    if (result.error) {
+      setNotice(result.error);
+      return;
+    }
+    const next = reviews.filter((row) => row.id !== target.id);
+    setReviews(next);
+    setAverages(averageReviews(next));
+    setNotice("Değerlendirme kaldırıldı.");
+    const { data } = await supabase
+      .from("profiles")
+      .select("rating, review_count")
+      .eq("id", profile.id)
+      .maybeSingle();
+    if (data) {
+      setProfile({
+        ...profile,
+        rating: (data as { rating: number | null }).rating,
+        review_count: (data as { review_count: number | null }).review_count,
+      });
+    }
   }
 
   const reviewCount = profile.review_count ?? 0;
@@ -380,6 +426,15 @@ export function UserProfileClient() {
                 <span className="ml-auto inline-flex items-center gap-0.5 text-[0.7rem] text-accent">
                   <StarIcon width={11} height={11} /> {review.overall}/5
                 </span>
+                {staffRole && (
+                  <button
+                    type="button"
+                    onClick={() => setRemoveReview(review)}
+                    className="shrink-0 rounded-md border border-danger/40 bg-danger/10 px-2 py-0.5 text-[0.58rem] font-semibold text-[#ffb3bb] hover:bg-danger/20"
+                  >
+                    Kaldır
+                  </button>
+                )}
               </div>
               {review.comment && (
                 <p className="mt-1.5 text-[0.78rem] leading-relaxed text-muted">{review.comment}</p>
@@ -477,6 +532,17 @@ export function UserProfileClient() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(removeReview)}
+        title="Değerlendirme kaldırılsın mı?"
+        description="Bu değerlendirme kalıcı olarak silinecek ve kullanıcının puanı yeniden hesaplanacak."
+        confirmLabel="Kaldır"
+        danger
+        busy={removing}
+        onConfirm={removeReviewNow}
+        onCancel={() => setRemoveReview(null)}
+      />
     </AppShell>
   );
 }

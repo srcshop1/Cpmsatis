@@ -18,6 +18,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ReasonDialog } from "@/components/admin/reason-dialog";
 import { MemberDetail } from "@/components/admin/member-detail";
+import { MemberSearch, type MemberHit } from "@/components/admin/member-search";
+import { AdminReviewList } from "@/components/admin/review-admin";
+import { ProfileEditor } from "@/components/admin/profile-editor";
 import { frames as frameList } from "@/lib/frames";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { myStaffRole } from "@/lib/social";
@@ -32,6 +35,8 @@ type Tab =
   | "listings"
   | "members"
   | "usersDetails"
+  | "reviewRemove"
+  | "profileEdit"
   | "frames"
   | "notify"
   | "sales"
@@ -57,10 +62,12 @@ const TABS: { key: Tab; label: string; ownerOnly?: boolean }[] = [
   { key: "listings", label: "İlanlar" },
   { key: "members", label: "Üyeler" },
   { key: "usersDetails", label: "Kullanıcı Verileri" },
+  { key: "reviewRemove", label: "Değerlendirme Kaldır" },
   { key: "frames", label: "Çerçeve Ver" },
   { key: "notify", label: "Bildirim Gönder" },
   { key: "sales", label: "Satışlar" },
   { key: "tags", label: "Tag Ver" },
+  { key: "profileEdit", label: "Profil Düzenle", ownerOnly: true },
   { key: "roles", label: "Moderatör", ownerOnly: true },
   { key: "announce", label: "Duyuru", ownerOnly: true },
   { key: "stats", label: "İstatistik" },
@@ -185,6 +192,7 @@ export default function AdminPage() {
   const [featureDays, setFeatureDays] = useState("3");
   const [featurePick, setFeaturePick] = useState<ListingRow | null>(null);
   const [stats, setStats] = useState<Record<string, number>>({});
+  const [reviewMember, setReviewMember] = useState<MemberHit | null>(null);
 
   const loadProfiles = useCallback(
     async (ids: string[]) => {
@@ -1496,6 +1504,30 @@ export default function AdminPage() {
               ))}
           </>
         )}
+
+        {tab === "reviewRemove" && (
+          <>
+            <div className="card p-4">
+              <h2 className="text-sm font-bold">Değerlendirme Kaldır</h2>
+              <p className="mt-1 text-[0.7rem] leading-relaxed text-muted-2">
+                Kullanıcıyı seç, profilindeki değerlendirmelerden kaldırmak istediğine bas.
+              </p>
+              <div className="mt-3">
+                <MemberSearch onPick={setReviewMember} selectedId={reviewMember?.id} />
+              </div>
+              {reviewMember && (
+                <p className="mt-2 text-[0.7rem] text-accent">Seçili: @{reviewMember.username}</p>
+              )}
+            </div>
+            {reviewMember ? (
+              <AdminReviewList sellerId={reviewMember.id} />
+            ) : (
+              <Empty text="Önce bir kullanıcı seç." />
+            )}
+          </>
+        )}
+
+        {tab === "profileEdit" && role === "owner" && <ProfileEditor />}
 
         {tab === "frames" && (
           <div className="card p-4">
