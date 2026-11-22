@@ -109,6 +109,7 @@ type Report = {
   details: string | null;
   status: string;
   admin_note?: string | null;
+  priority?: string | null;
   created_at: string;
 };
 
@@ -195,6 +196,8 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Record<string, number>>({});
   const [reviewMember, setReviewMember] = useState<MemberHit | null>(null);
   const [closeReportTarget, setCloseReportTarget] = useState<Report | null>(null);
+  const [selectedListings, setSelectedListings] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const loadProfiles = useCallback(
     async (ids: string[]) => {
@@ -344,18 +347,50 @@ export default function AdminPage() {
     }
 
     if (tab === "stats") {
-      const [{ count: userCount }, { count: listingCount }, { count: saleCount }, { count: ticketCount }] =
-        await Promise.all([
-          supabase.from("profiles").select("id", { count: "exact", head: true }),
-          supabase.from("listings").select("id", { count: "exact", head: true }),
-          supabase.from("sales").select("id", { count: "exact", head: true }),
-          supabase.from("support_tickets").select("id", { count: "exact", head: true }),
-        ]);
+      const dayAgo = new Date(Date.now() - 86400000).toISOString();
+      const [
+        { count: userCount },
+        { count: listingCount },
+        { count: saleCount },
+        { count: ticketCount },
+        { count: openTickets },
+        { count: openReports },
+        { count: activeListings },
+        { count: newUsers },
+        { count: newListings },
+      ] = await Promise.all([
+        supabase.from("profiles").select("id", { count: "exact", head: true }),
+        supabase.from("listings").select("id", { count: "exact", head: true }),
+        supabase.from("sales").select("id", { count: "exact", head: true }),
+        supabase.from("support_tickets").select("id", { count: "exact", head: true }),
+        supabase
+          .from("support_tickets")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "closed"),
+        supabase.from("reports").select("id", { count: "exact", head: true }).neq("status", "closed"),
+        supabase
+          .from("listings")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "active"),
+        supabase
+          .from("profiles")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayAgo),
+        supabase
+          .from("listings")
+          .select("id", { count: "exact", head: true })
+          .gte("created_at", dayAgo),
+      ]);
       setStats({
         users: userCount ?? 0,
         listings: listingCount ?? 0,
         sales: saleCount ?? 0,
         tickets: ticketCount ?? 0,
+        openTickets: openTickets ?? 0,
+        openReports: openReports ?? 0,
+        activeListings: activeListings ?? 0,
+        newUsers: newUsers ?? 0,
+        newListings: newListings ?? 0,
       });
     }
   }, [supabase, tab, loadProfiles]);
@@ -662,6 +697,40 @@ export default function AdminPage() {
     setBusy(null);
     setNotice(errorText ? `Hata: ${errorText}` : message);
     await loadTab();
+  }
+
+  async function hideSelectedListings() {
+    if (!supabase || selectedListings.length === 0) return;
+    setBulkBusy(true);
+    setNotice(null);
+    const { error } = await supabase
+      .from("listings")
+      .update({ status: "hidden" })
+      .in("id", selectedListings);
+    setBulkBusy(false);
+    if (error) {
+      setNotice(`Hata: ${error.message}`);
+      return;
+    }
+    setNotice(`${selectedListings.length} ilan gizlendi.`);
+    setSelectedListings([]);
+    await loadTab();
+  }
+
+  async function setReportPriority(report: Report, priority: "high" | "normal") {
+    if (!supabase) return;
+    setBusy(report.id);
+    const { error } = await supabase
+      .from("reports")
+      .update({ priority })
+      .eq("id", report.id);
+    setBusy(null);
+    if (error) {
+      setNotice("Öncelik kaydedilemedi.");
+      return;
+    }
+    setReports((prev) => prev.map((row) => (row.id === report.id ? { ...row, priority } : row)));
+    setNotice(priority === "high" ? "Bildiri öncelikli." : "Öncelik kaldırıldı.");
   }
 
   async function adminMember(
@@ -1257,7 +1326,13 @@ export default function AdminPage() {
         {tab === "reports" && (
           <>
             {reports.length === 0 && <Empty text="Bildiri yok." />}
-            {reports.map((report) => (
+            {[...reports]
+              .sort(
+                (a, b) =>
+                  (b.priority === "high" ? 1 : 0) - (a.priority === "high" ? 1 : 0) ||
+                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+              )
+              .map((report) => (
               <div key={report.id} className="card p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -1271,9 +1346,16 @@ export default function AdminPage() {
                         : "—"}
                     </p>
                   </div>
-                  <span className="badge shrink-0 border border-line bg-white/4 text-[0.6rem] text-muted">
-                    {STATUS_LABELS[report.status] ?? report.status}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="badge border border-line bg-white/4 text-[0.6rem] text-muted">
+                      {STATUS_LABELS[report.status] ?? report.status}
+                    </span>
+                    {report.priority === "high" && (
+                      <span className="badge border border-danger/40 bg-danger/10 text-[0.55rem] font-bold text-danger">
+                        ÖNCELİKLİ
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {report.details && (
                   <p className="mt-2 whitespace-pre-wrap text-[0.78rem] leading-relaxed text-muted">
@@ -1297,6 +1379,19 @@ export default function AdminPage() {
                   )}
                   {report.status !== "closed" && (
                     <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void setReportPriority(
+                            report,
+                            report.priority === "high" ? "normal" : "high",
+                          )
+                        }
+                        disabled={busy === report.id}
+                        className="btn btn-ghost h-8 px-3 text-[0.7rem]"
+                      >
+                        {report.priority === "high" ? "Önceliği kaldır" : "Öncelikli yap"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => updateReport(report.id, "reviewed")}
@@ -1324,13 +1419,51 @@ export default function AdminPage() {
         {tab === "listings" && (
           <>
             {listings.length === 0 && <Empty text="İlan yok." />}
+
+            {listings.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line-soft bg-white/3 px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedListings((prev) =>
+                      prev.length === listings.length ? [] : listings.map((item) => item.id),
+                    )
+                  }
+                  className="chip px-2 py-1 text-[0.65rem]"
+                >
+                  {selectedListings.length === listings.length ? "Seçimi kaldır" : "Tümünü seç"}
+                </button>
+                <span className="text-[0.65rem] text-muted-2">{selectedListings.length} seçili</span>
+                <button
+                  type="button"
+                  onClick={() => void hideSelectedListings()}
+                  disabled={selectedListings.length === 0 || bulkBusy}
+                  className="ml-auto chip border-danger/40 bg-danger/10 px-2 py-1 text-[0.65rem] text-[#ffb3bb] disabled:opacity-50"
+                >
+                  {bulkBusy ? "Gizleniyor…" : "Seçilenleri gizle"}
+                </button>
+              </div>
+            )}
             {listings.map((item) => {
               const featured =
                 item.featured_until && new Date(item.featured_until) > new Date();
               return (
                 <div key={item.id} className="card p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedListings.includes(item.id)}
+                      onChange={(event) =>
+                        setSelectedListings((prev) =>
+                          event.target.checked
+                            ? [...prev, item.id]
+                            : prev.filter((id) => id !== item.id),
+                        )
+                      }
+                      className="mt-1 h-4 w-4 shrink-0 accent-[var(--accent)]"
+                      aria-label={`${item.title} ilanını seç`}
+                    />
+                    <div className="min-w-0 flex-1">
                       <Link
                         href={`/ilan/goruntule?id=${item.id}`}
                         className="line-clamp-1 text-sm font-semibold hover:text-accent"
@@ -1834,9 +1967,13 @@ export default function AdminPage() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               { label: "Kullanıcı", value: stats.users, icon: <UsersIcon width={16} height={16} /> },
-              { label: "İlan", value: stats.listings, icon: <StarIcon width={16} height={16} /> },
+              { label: "Son 24 saat üye", value: stats.newUsers, icon: <UsersIcon width={16} height={16} /> },
+              { label: "Yayında ilan", value: stats.activeListings, icon: <StarIcon width={16} height={16} /> },
+              { label: "Son 24 saat ilan", value: stats.newListings, icon: <StarIcon width={16} height={16} /> },
+              { label: "Toplam ilan", value: stats.listings, icon: <StarIcon width={16} height={16} /> },
               { label: "Satış", value: stats.sales, icon: <CheckIcon width={16} height={16} /> },
-              { label: "Destek", value: stats.tickets, icon: <ClockIcon width={16} height={16} /> },
+              { label: "Açık destek", value: stats.openTickets, icon: <ClockIcon width={16} height={16} /> },
+              { label: "Açık bildiri", value: stats.openReports, icon: <FlagIcon width={16} height={16} /> },
             ].map((item) => (
               <div key={item.label} className="card p-4">
                 <span className="text-accent">{item.icon}</span>

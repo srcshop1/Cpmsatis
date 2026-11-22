@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BottomNav } from "@/components/bottom-nav";
 import { CtaBand } from "@/components/home/cta-band";
+import { HomeShowcase } from "@/components/home/showcase";
 import { SiteHeader } from "@/components/site-header";
 import {
   ArrowRightIcon,
@@ -135,6 +136,8 @@ export default function HomePage() {
               </div>
             </div>
           </section>
+
+          <HomeShowcase />
 
           {/* KATEGORİLER */}
           <section id="kategoriler" className="mx-auto w-full max-w-6xl px-4 py-10">

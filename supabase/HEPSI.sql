@@ -1318,6 +1318,71 @@ end; $$;
 grant execute on function public.toggle_listing_favorite(uuid) to authenticated;
 
 
+-- ---------- 5s) FİYAT GEÇMİŞİ / ROZET / NOTLAR / YANIT SÜRESİ ----------
+-- Fiyat düşünce eski fiyat saklanır (ilan altında "fiyat düştü" etiketi)
+alter table public.listings add column if not exists previous_price numeric;
+alter table public.listings add column if not exists price_dropped_at timestamptz;
+
+create or replace function public.track_listing_price()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if new.price is distinct from old.price and new.price < coalesce(old.price, 0) then
+    new.previous_price := old.price;
+    new.price_dropped_at := now();
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists listings_track_price on public.listings;
+create trigger listings_track_price before update of price on public.listings
+for each row execute function public.track_listing_price();
+
+-- Yetkili notları (panelde kullanıcı hakkında)
+create table if not exists public.user_notes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  author_id uuid references public.profiles (id) on delete set null,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists user_notes_user_idx on public.user_notes (user_id, created_at desc);
+alter table public.user_notes enable row level security;
+
+drop policy if exists user_notes_read on public.user_notes;
+create policy user_notes_read on public.user_notes for select using (public.is_staff());
+
+drop policy if exists user_notes_write on public.user_notes;
+create policy user_notes_write on public.user_notes for insert with check (public.is_staff());
+
+drop policy if exists user_notes_delete on public.user_notes;
+create policy user_notes_delete on public.user_notes for delete using (public.is_staff());
+
+-- Bildiri önceliği
+alter table public.reports add column if not exists priority text not null default 'normal';
+update public.reports set priority = 'normal' where priority is null;
+
+-- Satıcının ortalama yanıt süresi (dakika)
+create or replace function public.seller_response_minutes(p_user uuid)
+returns integer language sql security definer set search_path = public as $$
+  with m as (
+    select conversation_id, sender_id, created_at,
+           lag(sender_id) over (partition by conversation_id order by created_at) as prev_sender,
+           lag(created_at) over (partition by conversation_id order by created_at) as prev_at
+    from public.messages
+    where created_at > now() - interval '120 days'
+  ), r as (
+    select extract(epoch from (created_at - prev_at)) / 60.0 as mins
+    from m
+    where sender_id = p_user
+      and prev_sender is not null
+      and prev_sender <> p_user
+      and extract(epoch from (created_at - prev_at)) between 0 and 259200
+  )
+  select case when count(*) = 0 then null else round(avg(mins))::int end from r;
+$$;
+grant execute on function public.seller_response_minutes(uuid) to anon, authenticated;
+
+
 -- ============================================================
 --  SON KONTROL — hepsi "var" görünmeli
 -- ============================================================
@@ -1329,7 +1394,7 @@ where schemaname = 'public'
   and tablename in ('profiles','listings','user_roles','user_tags','user_frames','notifications',
                     'conversations','conversation_state','messages','sales','reviews',
                     'support_tickets','seller_applications','featured_requests','reports',
-                    'announcements','user_blocks','listing_favorites')
+                    'announcements','user_blocks','listing_favorites','user_notes')
 union all
 select 'fonksiyon: ' || proname, 'var'
 from pg_proc
@@ -1341,7 +1406,7 @@ where pronamespace = 'public'::regnamespace
                   'admin_notify','is_blocked_between','reply_review','admin_delete_review',
                   'admin_clear_reviews','admin_set_sales_count','admin_sync_sales_count','send_message',
                   'admin_clear_conversation','after_review_delete','increment_listing_view',
-                  'toggle_listing_favorite')
+                  'toggle_listing_favorite','seller_response_minutes')
 union all
 select 'depo: ' || id, 'var' from storage.buckets where id in ('avatars','listing-images')
 order by 1;

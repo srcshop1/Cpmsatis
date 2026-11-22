@@ -28,6 +28,8 @@ export type Listing = {
   seller_id: string;
   view_count?: number | null;
   favorite_count?: number | null;
+  previous_price?: number | null;
+  price_dropped_at?: string | null;
   seller: ListingSeller | null;
 };
 
@@ -47,7 +49,7 @@ export const LISTING_LIFETIME_DAYS = 15;
 export const LISTING_IMAGES_BUCKET = "listing-images";
 
 const LISTING_COLUMNS =
-  "id,title,price,category,categories,images,featured_until,created_at,seller_id,view_count,favorite_count";
+  "id,title,price,category,categories,images,featured_until,created_at,seller_id,view_count,favorite_count,previous_price,price_dropped_at";
 
 export function isFeatured(listing: Listing) {
   return Boolean(listing.featured_until && new Date(listing.featured_until) > new Date());
@@ -177,7 +179,16 @@ export async function fetchListings(
       return true;
     });
 
-  return { listings, error: null };
+  // Sıralama: öne çıkan > onaylı satıcı > normal ilan
+  const ranked = [...listings].sort((a, b) => {
+    const score = (listing: Listing) =>
+      (isFeatured(listing) ? 2 : 0) + (listing.seller?.verified_seller ? 1 : 0);
+    const diff = score(b) - score(a);
+    if (diff !== 0) return diff;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  return { listings: ranked, error: null };
 }
 
 export async function touchLastSeen(supabase: SupabaseClient, userId: string) {
@@ -390,4 +401,35 @@ export async function removeFavorite(
 
   const fallback = await toggleListingFavorite(supabase, userId, listingId);
   return fallback.error === null;
+}
+
+/** Fiyatı düşmüş mü? (son 30 gün) */
+export function priceDrop(listing: { previous_price?: number | null; price: number; price_dropped_at?: string | null }) {
+  const prev = Number(listing.previous_price ?? 0);
+  if (!prev || prev <= listing.price) return null;
+  if (listing.price_dropped_at) {
+    const age = Date.now() - new Date(listing.price_dropped_at).getTime();
+    if (age > 30 * 86400000) return null;
+  }
+  return { previous: prev, amount: prev - listing.price };
+}
+
+/** Satıcının ortalama yanıt süresi (dakika). */
+export async function loadResponseMinutes(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<number | null> {
+  const { data, error } = await supabase.rpc("seller_response_minutes", { p_user: userId });
+  if (error || data === null || data === undefined) return null;
+  const value = Number(data);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** "2 gün", "3 saat", "25 dk" gibi kısa süre metni. */
+export function responseLabel(minutes: number | null) {
+  if (minutes === null || Number.isNaN(minutes)) return null;
+  if (minutes <= 5) return "5 dakikadan kısa sürede yanıtlar";
+  if (minutes < 60) return `ortalama ${Math.round(minutes)} dk içinde yanıtlar`;
+  if (minutes < 60 * 24) return `ortalama ${Math.round(minutes / 60)} saat içinde yanıtlar`;
+  return `ortalama ${Math.round(minutes / (60 * 24))} gün içinde yanıtlar`;
 }

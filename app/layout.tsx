@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { AppErrorGuard } from "@/components/app-error-guard";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { PwaSetup } from "@/components/pwa";
 import "./globals.css";
 
 const SITE_URL = (
@@ -34,6 +35,9 @@ export const metadata: Metadata = {
     description: SITE_DESC,
   },
   robots: { index: true, follow: true },
+  manifest: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/manifest.webmanifest`,
+  appleWebApp: { capable: true, title: "CPM Satış", statusBarStyle: "black-translucent" },
+  icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }] },
 };
 
 export const viewport: Viewport = {
@@ -46,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="tr">
       <body className="min-h-screen antialiased">
+        <PwaSetup />
         <AppErrorGuard />
         <AuthProvider>{children}</AuthProvider>
       </body>

@@ -41,6 +41,13 @@ type ReviewRow = {
   created_at: string;
 };
 
+type NoteRow = {
+  id: string;
+  body: string;
+  created_at: string;
+  author_id: string | null;
+};
+
 type Detail = {
   profile: Profile | null;
   listings: ListingRow[];
@@ -71,6 +78,10 @@ export function MemberDetail({
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [notes, setNotes] = useState<NoteRow[]>([]);
+  const [notesAvailable, setNotesAvailable] = useState(true);
+  const [noteText, setNoteText] = useState("");
+  const [noteBusy, setNoteBusy] = useState(false);
 
   useEffect(() => {
     if (!supabase) {
@@ -151,6 +162,51 @@ export function MemberDetail({
       cancelled = true;
     };
   }, [supabase, userId]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await supabase
+        .from("user_notes")
+        .select("id, body, created_at, author_id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (cancelled) return;
+      if (error) {
+        setNotesAvailable(false);
+        return;
+      }
+      setNotes((data ?? []) as NoteRow[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, userId]);
+
+  async function addNote() {
+    if (!supabase || noteText.trim().length < 2 || noteBusy) return;
+    setNoteBusy(true);
+    setNotice(null);
+    const { data: auth } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("user_notes")
+      .insert({
+        user_id: userId,
+        author_id: auth.user?.id ?? null,
+        body: noteText.trim(),
+      })
+      .select("id, body, created_at, author_id")
+      .maybeSingle();
+    setNoteBusy(false);
+    if (error) {
+      setNotice("Not kaydedilemedi.");
+      return;
+    }
+    if (data) setNotes((prev) => [data as NoteRow, ...prev]);
+    setNoteText("");
+  }
 
   async function deleteReviewNow() {
     if (!supabase || !removeReview) return;
@@ -306,6 +362,50 @@ export function MemberDetail({
                 </div>
               ))}
             </Section>
+
+            {notesAvailable && (
+              <Section title={`Yetkili notları (${notes.length})`}>
+                <div className="flex gap-1.5">
+                  <input
+                    className="field h-9 text-[0.75rem]"
+                    value={noteText}
+                    maxLength={500}
+                    onChange={(event) => setNoteText(event.target.value)}
+                    placeholder="Bu kullanıcı hakkında not…"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void addNote();
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void addNote()}
+                    disabled={noteBusy || noteText.trim().length < 2}
+                    className="shrink-0 rounded-lg border border-accent/40 bg-accent/12 px-3 text-[0.7rem] font-semibold text-accent disabled:opacity-50"
+                  >
+                    Ekle
+                  </button>
+                </div>
+                {notes.length === 0 ? (
+                  <p className="mt-1.5 text-[0.7rem] text-muted-2">Not yok.</p>
+                ) : (
+                  <div className="mt-1.5 space-y-1.5">
+                    {notes.map((note) => (
+                      <div
+                        key={note.id}
+                        className="rounded-lg border border-line-soft bg-black/25 px-2.5 py-1.5"
+                      >
+                        <p className="whitespace-pre-wrap break-words text-[0.72rem] leading-relaxed text-muted">
+                          {note.body}
+                        </p>
+                        <p className="mt-0.5 text-[0.58rem] text-muted-2">
+                          {new Date(note.created_at).toLocaleString("tr-TR")}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Section>
+            )}
 
             <Section title={`Etiketler (${detail.tags.length})`}>
               {detail.tags.length === 0 ? (

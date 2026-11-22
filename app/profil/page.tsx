@@ -31,6 +31,7 @@ import {
 import { myStaffRole } from "@/lib/social";
 import { findFrame, frames, ownedFrames } from "@/lib/frames";
 import { StaffBadge, VerifiedBadge } from "@/components/user-badge";
+import { InstallAppButton } from "@/components/pwa";
 
 
 export default function ProfilePage() {
@@ -302,6 +303,10 @@ export default function ProfilePage() {
         >
           <UserIcon width={14} height={14} /> Vitrinim
         </Link>
+      </div>
+
+      <div className="mt-2">
+        <InstallAppButton />
       </div>
 
       {notice && (
