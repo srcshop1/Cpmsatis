@@ -3,13 +3,37 @@ import { AppErrorGuard } from "@/components/app-error-guard";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import "./globals.css";
 
+const SITE_URL = (
+  process.env.NEXT_PUBLIC_SITE_URL || "https://srcshop1.github.io/Cpmsatis"
+).replace(/\/$/, "");
+const SITE_NAME = "CPM Satış";
+const SITE_DESC =
+  "CPM araç, çizim ve hesap alım-satımı. İlan ver, filtrele, satıcıyla mesajlaşarak anlaş.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "CPM Satış — Dijital alışverişin en kolay hali",
-    template: "%s · CPM Satış",
+    default: `${SITE_NAME} — CPM araç, çizim ve hesap alım-satımı`,
+    template: `%s · ${SITE_NAME}`,
   },
-  description:
-    "Oyun hesapları, oyun içi ürünler, abonelikler ve dijital hizmetler. Ara, bul, güvenle satın al.",
+  description: SITE_DESC,
+  applicationName: SITE_NAME,
+  keywords: ["CPM", "CPM satış", "CPM ilan", "çizim", "araç", "hesap satış", "takas"],
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    locale: "tr_TR",
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} — CPM araç, çizim ve hesap alım-satımı`,
+    description: SITE_DESC,
+  },
+  twitter: {
+    card: "summary",
+    title: `${SITE_NAME} — CPM ilan pazarı`,
+    description: SITE_DESC,
+  },
+  robots: { index: true, follow: true },
 };
 
 export const viewport: Viewport = {
