@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { StarIcon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
-import { clearReviewsAsStaff, deleteReviewAsStaff } from "@/lib/admin";
+import { clearReviewsAsStaff, deleteReviewAsStaff, setReviewStatusAsStaff } from "@/lib/admin";
 import { loadReviews, type Review } from "@/lib/sales";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -62,6 +62,22 @@ export function AdminReviewList({
     setReviews(next);
     setNotice("Değerlendirme kaldırıldı.");
     onChanged?.(summarize(next));
+  }
+
+  async function changeStatus(review: Review, status: "approved" | "pending") {
+    if (!supabase) return;
+    setBusy(true);
+    setNotice(null);
+    const result = await setReviewStatusAsStaff(supabase, review.id, status);
+    setBusy(false);
+    if (result.error) {
+      setNotice(result.error);
+      return;
+    }
+    const next = reviews.map((row) => (row.id === review.id ? { ...row, status } : row));
+    setReviews(next);
+    setNotice(status === "approved" ? "Değerlendirme onaylandı." : "Değerlendirme şüpheliye alındı.");
+    onChanged?.(summarize(next.filter((row) => (row.status ?? "approved") === "approved")));
   }
 
   async function clearAll() {
@@ -134,14 +150,39 @@ export function AdminReviewList({
                   {review.comment}
                 </p>
               )}
+              {(review.status ?? "approved") !== "approved" && review.flag_reason && (
+                <p className="mt-0.5 text-[0.58rem] text-[#ffd166]">
+                  Şüphe: {review.flag_reason}
+                </p>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => setRemoveTarget(review)}
-              className="shrink-0 rounded-md border border-danger/40 bg-danger/10 px-2 py-1 text-[0.6rem] font-semibold text-[#ffb3bb] hover:bg-danger/20"
-            >
-              Kaldır
-            </button>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              {(review.status ?? "approved") !== "approved" && (
+                <span
+                  className="rounded-md border border-[#ffd166]/50 bg-[#ffd166]/12 px-1.5 py-0.5 text-[0.55rem] font-bold text-[#ffd166]"
+                  title={review.flag_reason ?? undefined}
+                >
+                  İNCELEME
+                </span>
+              )}
+              {(review.status ?? "approved") !== "approved" && (
+                <button
+                  type="button"
+                  onClick={() => void changeStatus(review, "approved")}
+                  disabled={busy}
+                  className="rounded-md border border-mint/40 bg-mint/12 px-2 py-1 text-[0.6rem] font-semibold text-mint hover:bg-mint/20 disabled:opacity-50"
+                >
+                  Onayla
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setRemoveTarget(review)}
+                className="rounded-md border border-danger/40 bg-danger/10 px-2 py-1 text-[0.6rem] font-semibold text-[#ffb3bb] hover:bg-danger/20"
+              >
+                Kaldır
+              </button>
+            </div>
           </div>
         ))}
 

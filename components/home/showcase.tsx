@@ -42,7 +42,7 @@ export function HomeShowcase() {
             "id, username, avatar_url, sales_count, rating, review_count, verified_seller, staff_tag, equipped_frame, last_seen_at",
           )
           .order("sales_count", { ascending: false })
-          .limit(6),
+          .limit(10),
       ]);
 
       if (cancelled) return;
@@ -127,9 +127,11 @@ export function HomeShowcase() {
       {sellers.length > 0 && (
         <section className="mx-auto w-full max-w-6xl px-4 py-8">
           <h2 className="text-lg font-extrabold tracking-tight sm:text-xl">Popüler satıcılar</h2>
-          <p className="mt-0.5 text-[0.72rem] text-muted-2">En çok işlem yapan satıcılar</p>
+          <p className="mt-0.5 text-[0.72rem] text-muted-2">
+            En çok başarılı işlemi olan 10 satıcı
+          </p>
 
-          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
             {sellers.map((seller) => (
               <Link
                 key={seller.id}

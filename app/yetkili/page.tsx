@@ -19,6 +19,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ReasonDialog } from "@/components/admin/reason-dialog";
 import { MemberDetail } from "@/components/admin/member-detail";
 import { MemberSearch, type MemberHit } from "@/components/admin/member-search";
+import { BADGES, badgeLabel } from "@/lib/badges";
 import { AdminReviewList } from "@/components/admin/review-admin";
 import { ProfileEditor } from "@/components/admin/profile-editor";
 import { frames as frameList } from "@/lib/frames";
@@ -170,6 +171,7 @@ export default function AdminPage() {
 
   const [tagQuery, setTagQuery] = useState("");
   const [tagChoice, setTagChoice] = useState("vip");
+  const [customTag, setCustomTag] = useState("");
   const [roleQuery, setRoleQuery] = useState("");
   const [roleChoice, setRoleChoice] = useState("moderator");
   const [announceBody, setAnnounceBody] = useState("");
@@ -358,6 +360,7 @@ export default function AdminPage() {
         { count: activeListings },
         { count: newUsers },
         { count: newListings },
+        { count: pendingReviews },
       ] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }),
         supabase.from("listings").select("id", { count: "exact", head: true }),
@@ -380,6 +383,10 @@ export default function AdminPage() {
           .from("listings")
           .select("id", { count: "exact", head: true })
           .gte("created_at", dayAgo),
+        supabase
+          .from("reviews")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "approved"),
       ]);
       setStats({
         users: userCount ?? 0,
@@ -391,6 +398,7 @@ export default function AdminPage() {
         activeListings: activeListings ?? 0,
         newUsers: newUsers ?? 0,
         newListings: newListings ?? 0,
+        pendingReviews: pendingReviews ?? 0,
       });
     }
   }, [supabase, tab, loadProfiles]);
@@ -896,7 +904,7 @@ export default function AdminPage() {
           .eq("id", profile.id);
       }
       setNotice(
-        `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${tagChoice}`,
+        `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${badgeLabel(tagChoice)}`,
       );
       return;
     }
@@ -905,7 +913,7 @@ export default function AdminPage() {
     setNotice(
       error
         ? "İşlem tamamlanamadı. Lütfen tekrar dene."
-        : `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${tagChoice}`,
+        : `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${badgeLabel(tagChoice)}`,
     );
   }
 
@@ -1832,9 +1840,9 @@ export default function AdminPage() {
 
         {tab === "tags" && (
           <div className="card p-4">
-            <h2 className="text-sm font-bold">Tag Ver / Al</h2>
+            <h2 className="text-sm font-bold">Rozet Ver / Al</h2>
             <p className="mt-1 text-[0.7rem] text-muted-2">
-              Kullanıcı adı veya e-posta yaz, tag seç. Kurucu rolü buradan verilmez.
+              Kullanıcı adı veya e-posta yaz, rozeti seç. Rozet profilde ve ilanlarında görünür.
             </p>
             <input
               className="field mt-3"
@@ -1843,17 +1851,44 @@ export default function AdminPage() {
               placeholder="kullanıcı adı veya e-posta"
             />
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {["vip", "premium", "verified_seller"].map((tag) => (
+              {BADGES.map((badge) => (
                 <button
-                  key={tag}
+                  key={badge.key}
                   type="button"
-                  onClick={() => setTagChoice(tag)}
-                  className={`chip ${tagChoice === tag ? "chip-active" : ""}`}
+                  onClick={() => setTagChoice(badge.key)}
+                  className={`chip px-2.5 py-1 text-[0.7rem] ${
+                    tagChoice === badge.key ? "chip-active" : ""
+                  }`}
                 >
-                  {tag}
+                  {badge.label}
                 </button>
               ))}
             </div>
+
+            <div className="mt-2 flex gap-1.5">
+              <input
+                className="field h-9 text-[0.72rem]"
+                value={customTag}
+                onChange={(event) => setCustomTag(event.target.value)}
+                maxLength={24}
+                placeholder="Özel rozet yaz (ör. Efsane Satıcı)"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const value = customTag.trim();
+                  if (value.length < 2) return;
+                  setTagChoice(value);
+                }}
+                className="shrink-0 rounded-lg border border-line bg-white/4 px-3 text-[0.7rem] font-semibold text-muted"
+              >
+                Seç
+              </button>
+            </div>
+
+            <p className="mt-2 text-[0.66rem] text-muted-2">
+              Seçili rozet: <span className="font-semibold text-accent">{badgeLabel(tagChoice)}</span>
+            </p>
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
@@ -1974,6 +2009,7 @@ export default function AdminPage() {
               { label: "Satış", value: stats.sales, icon: <CheckIcon width={16} height={16} /> },
               { label: "Açık destek", value: stats.openTickets, icon: <ClockIcon width={16} height={16} /> },
               { label: "Açık bildiri", value: stats.openReports, icon: <FlagIcon width={16} height={16} /> },
+              { label: "İncelemede değerlendirme", value: stats.pendingReviews, icon: <StarIcon width={16} height={16} /> },
             ].map((item) => (
               <div key={item.label} className="card p-4">
                 <span className="text-accent">{item.icon}</span>

@@ -35,6 +35,8 @@ export type Review = {
   comment: string | null;
   reply?: string | null;
   replied_at?: string | null;
+  status?: string | null;
+  flag_reason?: string | null;
   created_at: string;
   reviewer?: { username: string; avatar_url: string | null } | null;
 };
@@ -174,7 +176,11 @@ export async function loadReviews(
 
   // Cevap kolonları yoksa temel alanlarla devam et
   let data: unknown[] | null = null;
-  for (const columns of [`${REVIEW_COLUMNS}, reply, replied_at`, REVIEW_COLUMNS]) {
+  for (const columns of [
+    `${REVIEW_COLUMNS}, reply, replied_at, status, flag_reason`,
+    `${REVIEW_COLUMNS}, reply, replied_at`,
+    REVIEW_COLUMNS,
+  ]) {
     const result = await build(columns);
     if (!result.error) {
       data = result.data as unknown[] | null;
