@@ -1042,6 +1042,83 @@ begin
 end; $$;
 grant execute on function public.reply_review(uuid, text) to authenticated;
 
+-- ---------- 5j) YETKİLİ: DEĞERLENDİRME KALDIRMA ----------
+create or replace function public.admin_delete_review(p_review uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_seller uuid; v_by text;
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+
+  select seller_id into v_seller from public.reviews where id = p_review;
+  if v_seller is null then raise exception 'Değerlendirme bulunamadı'; end if;
+
+  delete from public.reviews where id = p_review;
+
+  update public.profiles p set
+    rating = (select round(avg(r.overall)::numeric, 2) from public.reviews r where r.seller_id = v_seller),
+    review_count = (select count(*) from public.reviews r where r.seller_id = v_seller)
+  where p.id = v_seller;
+
+  select username into v_by from public.profiles where id = auth.uid();
+  perform public.notify(v_seller, 'review', 'Değerlendirme kaldırıldı',
+    coalesce(v_by, 'Yetkili') || ' bir değerlendirmeni kaldırdı.', '/profil');
+end; $$;
+grant execute on function public.admin_delete_review(uuid) to authenticated;
+
+create or replace function public.admin_clear_reviews(p_user uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer := 0;
+begin
+  if public.my_staff_role() is distinct from 'owner' then raise exception 'Yetkisiz'; end if;
+
+  delete from public.reviews where seller_id = p_user;
+  get diagnostics v_count = row_count;
+
+  update public.profiles p set
+    rating = (select round(avg(r.overall)::numeric, 2) from public.reviews r where r.seller_id = p_user),
+    review_count = (select count(*) from public.reviews r where r.seller_id = p_user)
+  where p.id = p_user;
+
+  if v_count > 0 then
+    perform public.notify(p_user, 'review', 'Değerlendirmeler kaldırıldı',
+      'Profilindeki değerlendirmeler yetkili tarafından kaldırıldı.', '/profil');
+  end if;
+  return v_count;
+end; $$;
+grant execute on function public.admin_clear_reviews(uuid) to authenticated;
+
+-- ---------- 5k) KURUCU: PROFİL DÜZENLEME ----------
+create or replace function public.admin_set_sales_count(p_user uuid, p_count integer)
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer; v_ok boolean;
+begin
+  if public.my_staff_role() is distinct from 'owner' then raise exception 'Yetkisiz'; end if;
+
+  v_count := greatest(0, least(999999, coalesce(p_count, 0)));
+  update public.profiles set sales_count = v_count where id = p_user;
+  v_ok := found;
+  if not v_ok then raise exception 'Kullanıcı bulunamadı'; end if;
+
+  perform public.notify(p_user, 'staff', 'Profilin güncellendi',
+    'Başarılı işlem sayın ' || v_count || ' olarak düzenlendi.', '/profil');
+  return v_count;
+end; $$;
+grant execute on function public.admin_set_sales_count(uuid, integer) to authenticated;
+
+create or replace function public.admin_sync_sales_count(p_user uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer := 0;
+begin
+  if public.my_staff_role() is distinct from 'owner' then raise exception 'Yetkisiz'; end if;
+
+  select count(*) into v_count from public.sales
+   where seller_id = p_user and status = 'approved';
+
+  update public.profiles set sales_count = v_count where id = p_user;
+  return v_count;
+end; $$;
+grant execute on function public.admin_sync_sales_count(uuid) to authenticated;
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 
@@ -1065,7 +1142,8 @@ where pronamespace = 'public'::regnamespace
                   'buyer_confirm','approve_sale','resolve_sales','admin_set_tag','admin_set_role',
                   'admin_set_frame','admin_set_banned','admin_delete_account','admin_feature_listing',
                   'admin_set_listing_status','admin_remove_role','expire_listings','renew_listing',
-                  'admin_notify','is_blocked_between','reply_review')
+                  'admin_notify','is_blocked_between','reply_review','admin_delete_review',
+                  'admin_clear_reviews','admin_set_sales_count','admin_sync_sales_count')
 union all
 select 'depo: ' || id, 'var' from storage.buckets where id in ('avatars','listing-images')
 order by 1;

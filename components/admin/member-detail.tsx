@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
 import { Price } from "@/components/price";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { deleteReviewAsStaff } from "@/lib/admin";
 import { findFrame } from "@/lib/frames";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -62,6 +64,9 @@ export function MemberDetail({
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [removeReview, setRemoveReview] = useState<ReviewRow | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -142,6 +147,24 @@ export function MemberDetail({
       cancelled = true;
     };
   }, [supabase, userId]);
+
+  async function deleteReviewNow() {
+    if (!supabase || !removeReview) return;
+    setRemoving(true);
+    setNotice(null);
+    const target = removeReview;
+    const result = await deleteReviewAsStaff(supabase, target.id);
+    setRemoving(false);
+    setRemoveReview(null);
+    if (result.error) {
+      setNotice(result.error);
+      return;
+    }
+    setDetail((prev) =>
+      prev ? { ...prev, reviews: prev.reviews.filter((row) => row.id !== target.id) } : prev,
+    );
+    setNotice("Değerlendirme kaldırıldı.");
+  }
 
   const profile = detail?.profile;
 
@@ -289,18 +312,42 @@ export function MemberDetail({
 
             <Section title={`Değerlendirmeler (${detail.reviews.length})`}>
               {detail.reviews.length === 0 && <Empty text="Değerlendirme yok." />}
-              {detail.reviews.slice(0, 5).map((review) => (
-                <div key={review.id} className="border-b border-line-soft py-1.5 last:border-0">
-                  <p className="text-[0.7rem] font-semibold text-accent">{review.overall}/5</p>
-                  {review.comment && (
-                    <p className="text-[0.72rem] text-muted">{review.comment}</p>
-                  )}
+              {detail.reviews.slice(0, 20).map((review) => (
+                <div
+                  key={review.id}
+                  className="flex items-start gap-2 border-b border-line-soft py-1.5 last:border-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[0.7rem] font-semibold text-accent">{review.overall}/5</p>
+                    {review.comment && (
+                      <p className="break-words text-[0.72rem] text-muted">{review.comment}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRemoveReview(review)}
+                    className="shrink-0 rounded-md border border-danger/40 bg-danger/10 px-2 py-0.5 text-[0.58rem] font-semibold text-[#ffb3bb] hover:bg-danger/20"
+                  >
+                    Kaldır
+                  </button>
                 </div>
               ))}
+              {notice && <p className="mt-1.5 text-[0.66rem] text-accent">{notice}</p>}
             </Section>
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={Boolean(removeReview)}
+        title="Değerlendirme kaldırılsın mı?"
+        description="Bu değerlendirme kalıcı olarak silinecek ve kullanıcının puanı yeniden hesaplanacak."
+        confirmLabel="Kaldır"
+        danger
+        busy={removing}
+        onConfirm={deleteReviewNow}
+        onCancel={() => setRemoveReview(null)}
+      />
     </div>
   );
 }
