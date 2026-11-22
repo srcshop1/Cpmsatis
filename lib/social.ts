@@ -158,13 +158,15 @@ export async function loadMessages(
   clearedAt?: string | null,
 ): Promise<Message[]> {
   const base = "id, conversation_id, sender_id, body, listing_ref, created_at";
+  // En YENİ mesajlar gelsin diye azalan sırada çekilir, sonra eskiden yeniye çevrilir.
+  // (Artan sırada limit kullanılırsa 200'den fazla mesajı olan sohbette yeni mesajlar hiç görünmez.)
   const run = async (columns: string) => {
     let request = supabase
       .from("messages")
       .select(columns)
       .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true })
-      .limit(200);
+      .order("created_at", { ascending: false })
+      .limit(250);
     if (clearedAt) request = request.gt("created_at", clearedAt);
     return request;
   };
@@ -186,7 +188,9 @@ export async function loadMessages(
     }
   }
 
-  return ((data ?? []) as Message[]).map((message) => ({
+  const rows = ((data ?? []) as Message[]).slice().reverse();
+
+  return rows.map((message) => ({
     ...message,
     listing_ref:
       typeof message.listing_ref === "string"
