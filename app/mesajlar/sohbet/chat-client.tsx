@@ -506,10 +506,18 @@ export function ChatClient() {
                   const start = touchStart.current;
                   if (!start || start.id !== message.id) return;
                   const dx = event.touches[0].clientX - start.x;
-                  if (dx < -6) setDrag({ id: message.id, dx: Math.max(dx, -70) });
+                  // Kendi mesajımızı sağa, karşı tarafın mesajını sola kaydırınca yanıtlanır
+                  if (mine) {
+                    if (dx > 6) setDrag({ id: message.id, dx: Math.min(dx, 70) });
+                  } else if (dx < -6) {
+                    setDrag({ id: message.id, dx: Math.max(dx, -70) });
+                  }
                 }}
                 onTouchEnd={() => {
-                  if (drag && drag.id === message.id && drag.dx <= -44) setReplyTo(message);
+                  if (drag && drag.id === message.id) {
+                    const enough = mine ? drag.dx >= 44 : drag.dx <= -44;
+                    if (enough) setReplyTo(message);
+                  }
                   setDrag(null);
                   touchStart.current = null;
                 }}
