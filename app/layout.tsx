@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { AppErrorGuard } from "@/components/app-error-guard";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import "./globals.css";
 
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="tr">
       <body className="min-h-screen antialiased">
+        <AppErrorGuard />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

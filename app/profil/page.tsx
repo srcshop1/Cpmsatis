@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
@@ -296,6 +297,14 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+
+      {/* Kendi profilini başkalarının gördüğü gibi aç */}
+      <Link
+        href={`/kullanici?id=${user.id}`}
+        className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-line bg-white/4 text-sm font-semibold text-muted transition hover:border-accent/50 hover:text-text"
+      >
+        <UserIcon width={16} height={16} /> Profiliniz
+      </Link>
 
       {/* Kimlik kartı */}
       <div className="mt-4 card relative overflow-hidden p-5">
