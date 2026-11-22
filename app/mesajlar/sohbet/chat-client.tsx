@@ -21,6 +21,7 @@ import {
   XIcon,
 } from "@/components/icons";
 import { Price } from "@/components/price";
+import { censorProfanity } from "@/lib/profanity";
 import { formatPriceLabel } from "@/lib/catalog";
 import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -243,7 +244,8 @@ export function ChatClient() {
 
   async function handleSend() {
     if (!supabase || !user || sending) return;
-    const body = draft.trim();
+    // Küfür engellenmez, sansürlenerek gönderilir
+    const body = censorProfanity(draft.trim());
     if (!body) return;
     // Sohbet bilgisi bir şekilde boş kaldıysa göndermeden önce tekrar çek
     let conv = conversation;

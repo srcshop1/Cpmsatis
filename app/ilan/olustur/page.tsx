@@ -18,7 +18,7 @@ import {
   listingCategories,
 } from "@/lib/catalog";
 import { LISTINGS_TABLE, LISTING_IMAGES_BUCKET } from "@/lib/listings";
-import { PROFANITY_MESSAGE, hasProfanity } from "@/lib/profanity";
+import { censorProfanity } from "@/lib/profanity";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -101,15 +101,10 @@ export default function CreateListingPage() {
       setError(`Fiyat en fazla ${MAX_LISTING_PRICE.toLocaleString("tr-TR")} TL olabilir.`);
       return;
     }
-    if (hasProfanity(cleanTitle)) {
-      setError(PROFANITY_MESSAGE);
-      return;
-    }
-    const descriptionHtml = sanitizeHtml(editorRef.current?.innerHTML ?? "");
-    if (hasProfanity(descriptionHtml)) {
-      setError(PROFANITY_MESSAGE);
-      return;
-    }
+    const safeTitle = censorProfanity(cleanTitle);
+    const descriptionHtml = censorProfanity(
+      sanitizeHtml(editorRef.current?.innerHTML ?? ""),
+    );
     if (!descriptionHtml || descriptionHtml.length < 10) {
       setError("Açıklama en az 10 karakter olmalı.");
       return;
@@ -145,7 +140,7 @@ export default function CreateListingPage() {
         .from(LISTINGS_TABLE)
         .insert({
           seller_id: user.id,
-          title: cleanTitle,
+          title: safeTitle,
           description_html: descriptionHtml,
           price: Math.round(numericPrice),
           category: categories[0],

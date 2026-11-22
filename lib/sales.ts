@@ -1,7 +1,7 @@
 "use client";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PROFANITY_MESSAGE, hasProfanity } from "@/lib/profanity";
+import { censorProfanity } from "@/lib/profanity";
 
 export type SaleStatus = "pending_buyer" | "confirmed" | "approved" | "declined" | "cancelled";
 
@@ -208,9 +208,8 @@ export async function replyToReview(
   reviewId: string,
   reply: string,
 ): Promise<{ error: string | null }> {
-  const text = reply.trim();
+  const text = censorProfanity(reply.trim()).slice(0, 500);
   if (!text) return { error: "Cevap boş olamaz." };
-  if (hasProfanity(text)) return { error: PROFANITY_MESSAGE };
 
   const { error } = await supabase.rpc("reply_review", {
     p_review: reviewId,
@@ -240,7 +239,7 @@ export async function createReview(
     comment: string;
   },
 ): Promise<{ error: string | null }> {
-  if (hasProfanity(input.comment)) return { error: PROFANITY_MESSAGE };
+  const comment = censorProfanity(input.comment.trim());
   const { error } = await supabase.from("reviews").insert({
     sale_id: input.saleId,
     listing_id: input.listingId,
@@ -251,7 +250,7 @@ export async function createReview(
     communication: input.communication,
     delivery: input.delivery,
     overall: input.overall,
-    comment: input.comment.trim() || null,
+    comment: comment || null,
   });
   return { error: error?.message ?? null };
 }
