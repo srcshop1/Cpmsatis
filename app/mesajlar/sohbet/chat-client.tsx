@@ -100,7 +100,6 @@ export function ChatClient() {
   const [clearedAt, setClearedAt] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
   const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -118,6 +117,7 @@ export function ChatClient() {
   const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const refreshRef = useRef<() => Promise<void>>(async () => {});
   const touchStart = useRef<{ id: string; x: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -221,7 +221,8 @@ export function ChatClient() {
       }
     };
 
-    const timer = setInterval(() => void refresh(true), 3000);
+    refreshRef.current = () => refresh(true);
+    const timer = setInterval(() => void refresh(true), 2500);
 
     const onVisible = () => {
       if (document.visibilityState === "visible") void refresh(true);
@@ -236,6 +237,42 @@ export function ChatClient() {
     };
   }, [supabase, conversation, clearedAt]);
 
+  // Canlı güncelleme: karşı taraf yazınca beklemeden düşsün (polling yedek olarak çalışır)
+  useEffect(() => {
+    if (!supabase || !conversation) return;
+    const channel = supabase
+      .channel(`sohbet-${conversation.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversation.id}`,
+        },
+        () => {
+          void refreshRef.current();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversation.id}`,
+        },
+        () => {
+          void refreshRef.current();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [supabase, conversation]);
+
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
@@ -243,10 +280,15 @@ export function ChatClient() {
   }, [messages.length]);
 
   async function handleSend() {
-    if (!supabase || !user || sending) return;
+    if (!supabase || !user) return;
     // Küfür engellenmez, sansürlenerek gönderilir
     const body = censorProfanity(draft.trim());
     if (!body) return;
+    if (blocked) {
+      setError("Bu sohbette engelleme var, mesaj gönderilemez.");
+      return;
+    }
+
     // Sohbet bilgisi bir şekilde boş kaldıysa göndermeden önce tekrar çek
     let conv = conversation;
     if (!conv) {
@@ -262,70 +304,54 @@ export function ChatClient() {
       setError("Sohbet bulunamadı. Mesajlar sayfasından sohbeti yeniden aç.");
       return;
     }
-    if (blocked) {
-      setError("Bu sohbette engelleme var, mesaj gönderilemez.");
-      return;
-    }
-    setSending(true);
-    setDraft("");
-    const result = await sendMessage(supabase, {
-      conversationId: conv.id,
-      senderId: user.id,
-      body,
-      replyTo: replyTo
-        ? {
-            id: replyTo.id,
-            username:
-              replyTo.sender_id === user.id
-                ? user.username ?? "sen"
-                : other?.username ?? "kullanıcı",
-            body:
-              replyTo.listing_ref?.kind === "image"
-                ? "Görsel"
-                : replyTo.listing_ref?.title ?? replyTo.body,
-            kind: replyTo.listing_ref?.kind === "image" ? "image" : replyTo.listing_ref?.kind ?? "text",
-          }
-        : null,
-    });
-    setSending(false);
-    if (result.error) {
-      setDraft(body);
-      setError(result.error);
-      return;
-    }
-    setError(null);
-    setReplyTo(null);
 
-    // Mesaj hemen görünsün; sunucudan gelen liste birazdan onun yerini alır.
+    const quoted = replyTo
+      ? {
+          id: replyTo.id,
+          username:
+            replyTo.sender_id === user.id
+              ? user.username ?? "sen"
+              : other?.username ?? "kullanıcı",
+          body:
+            replyTo.listing_ref?.kind === "image"
+              ? "Görsel"
+              : replyTo.listing_ref?.title ?? replyTo.body,
+          kind: replyTo.listing_ref?.kind === "image" ? "image" : replyTo.listing_ref?.kind ?? "text",
+        }
+      : null;
+
+    // Balon ANINDA görünsün; ağ beklemesi kullanıcıya yansımasın.
     const optimistic: Message = {
       id: `local-${Date.now()}`,
       conversation_id: conv.id,
       sender_id: user.id,
       body,
       listing_ref: null,
-      reply_to: replyTo
-        ? {
-            id: replyTo.id,
-            username:
-              replyTo.sender_id === user.id
-                ? user.username ?? "sen"
-                : other?.username ?? "kullanıcı",
-            body:
-              replyTo.listing_ref?.kind === "image"
-                ? "Görsel"
-                : replyTo.listing_ref?.title ?? replyTo.body,
-            kind: replyTo.listing_ref?.kind === "image" ? "image" : replyTo.listing_ref?.kind ?? "text",
-          }
-        : null,
+      reply_to: quoted,
       read_at: null,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimistic]);
+    setDraft("");
+    setReplyTo(null);
+    setError(null);
+    const result = await sendMessage(supabase, {
+      conversationId: conv.id,
+      senderId: user.id,
+      body,
+      replyTo: quoted,
+    });
+
+    if (result.error) {
+      setMessages((prev) => prev.filter((message) => message.id !== optimistic.id));
+      setDraft(body);
+      setError(result.error);
+      return;
+    }
+
     const rows = await loadMessages(supabase, conv.id, clearedAt);
     if (rows.length === 0) return;
-    const arrived = rows.some(
-      (row) => row.sender_id === user.id && row.body === body,
-    );
+    const arrived = rows.some((row) => row.sender_id === user.id && row.body === body);
     setMessages(arrived ? rows : [...rows, optimistic]);
   }
 
@@ -783,10 +809,10 @@ export function ChatClient() {
           <button
             type="button"
             onClick={handleSend}
-            disabled={blocked || sending || !draft.trim()}
+            disabled={blocked || !draft.trim()}
             className="btn btn-primary h-11 shrink-0 px-4 text-sm disabled:opacity-50"
           >
-            {sending ? "…" : "Gönder"}
+            Gönder
           </button>
         </div>
 

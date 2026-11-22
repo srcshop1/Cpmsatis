@@ -76,8 +76,20 @@ export default function MessagesPage() {
     };
 
     void load();
+
+    // Yeni mesaj gelince liste anında tazelensin
+    const channel = supabase
+      .channel("mesaj-listesi")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages" },
+        () => void load(),
+      )
+      .subscribe();
+
     return () => {
       cancelled = true;
+      void supabase.removeChannel(channel);
     };
   }, [supabase, user]);
 
