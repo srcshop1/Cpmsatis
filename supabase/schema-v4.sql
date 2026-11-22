@@ -506,6 +506,7 @@ end; $$;
 grant execute on function public.send_message(uuid, text, jsonb, jsonb) to authenticated;
 
 -- ---------- 5m) CANLI MESAJ (REALTIME) ----------
+-- NOT: ALTER PUBLICATION plpgsql içinde doğrudan çalışmaz, EXECUTE gerekir.
 do $$
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
@@ -513,9 +514,12 @@ begin
       select 1 from pg_publication_tables
        where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'messages'
     ) then
-      alter publication supabase_realtime add table public.messages;
+      execute 'alter publication supabase_realtime add table public.messages';
     end if;
   end if;
+exception when others then
+  -- Realtime kurulamazsa mesajlaşma yine çalışır (yoklama devrede)
+  null;
 end $$;
 
 -- ---------- 5n) BİLDİRİ NOTU ----------

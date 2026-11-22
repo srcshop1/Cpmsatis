@@ -490,20 +490,26 @@ export function ChatClient() {
     });
 
     if (rpcError) {
-      // Fonksiyon yoksa kendi mesajlarını silmeyi dene
+      console.error("[sohbet temizle]", rpcError.message);
+
+      // Sunucu fonksiyonu yoksa: sadece silinebilen (kendi) mesajlar gider
       const fallback = await supabase
         .from("messages")
         .delete()
-        .eq("conversation_id", conversation.id);
+        .eq("conversation_id", conversation.id)
+        .select("id");
+
       setClearing(false);
       setClearAllOpen(false);
       setMenuOpen(false);
-      if (fallback.error) {
-        setError("Mesajlar temizlenemedi. Bu işlem yalnızca yetkililerde çalışır.");
+
+      const removed = fallback.data?.length ?? 0;
+      if (fallback.error || removed === 0) {
+        setError("Sohbet temizlenemedi. Bu işlem yalnızca yetkililerde çalışır.");
         return;
       }
       setMessages([]);
-      setInfo("Sohbetteki mesajlar temizlendi.");
+      setInfo(`Sohbetteki mesajlar temizlendi · ${removed} mesaj silindi.`);
       return;
     }
 
