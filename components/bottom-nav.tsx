@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { GridIcon, MenuIcon, MessageIcon, PlusIcon } from "@/components/icons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { UNREAD_EVENT, loadUnreadMessages } from "@/lib/social";
 
 type NavItem = {
   href: string;
@@ -49,32 +50,28 @@ export function BottomNav() {
     let cancelled = false;
 
     const load = async () => {
-      const { data: conversations } = await supabase
-        .from("conversations")
-        .select("id")
-        .or(`user_a.eq.${user.id},user_b.eq.${user.id}`);
-
-      const ids = ((conversations ?? []) as { id: string }[]).map((row) => row.id);
-      if (ids.length === 0) {
-        if (!cancelled) setUnreadMessages(0);
-        return;
-      }
-
-      const { count } = await supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .in("conversation_id", ids)
-        .neq("sender_id", user.id)
-        .is("read_at", null);
-
-      if (!cancelled) setUnreadMessages(count ?? 0);
+      const { total } = await loadUnreadMessages(supabase, user.id);
+      if (!cancelled) setUnreadMessages(total);
     };
 
     void load();
     const timer = setInterval(() => void load(), 20000);
+
+    const onEvent = () => void load();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+
+    window.addEventListener(UNREAD_EVENT, onEvent);
+    window.addEventListener("focus", onEvent);
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       cancelled = true;
       clearInterval(timer);
+      window.removeEventListener(UNREAD_EVENT, onEvent);
+      window.removeEventListener("focus", onEvent);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [supabase, user, pathname]);
 

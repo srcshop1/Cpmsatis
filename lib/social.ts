@@ -63,6 +63,18 @@ export const REPORT_REASONS = [
   "Diğer",
 ];
 
+/** Okunmamış mesaj / bildirim sayaçlarının anında tazelenmesi için olay adları. */
+export const UNREAD_EVENT = "cpmsatis:unread";
+export const NOTIFICATION_EVENT = "cpmsatis:notifications";
+
+export function notifyUnreadChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(UNREAD_EVENT));
+}
+
+export function notifyNotificationChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(NOTIFICATION_EVENT));
+}
+
 export async function myStaffRole(supabase: SupabaseClient): Promise<string | null> {
   const { data, error } = await supabase.rpc("my_staff_role");
   if (error) return null;
@@ -220,12 +232,13 @@ export async function markMessagesRead(
   conversationId: string,
   userId: string,
 ) {
-  await supabase
+  const { error } = await supabase
     .from("messages")
     .update({ read_at: new Date().toISOString() })
     .eq("conversation_id", conversationId)
     .neq("sender_id", userId)
     .is("read_at", null);
+  if (!error) notifyUnreadChanged();
 }
 
 /** Kullanıcının tüm sohbetlerindeki okunmamış karşı mesajları okundu yapar. */
@@ -235,12 +248,60 @@ export async function markAllConversationsRead(
   conversationIds: string[],
 ) {
   if (conversationIds.length === 0) return;
-  await supabase
+  const { error } = await supabase
     .from("messages")
     .update({ read_at: new Date().toISOString() })
     .in("conversation_id", conversationIds)
     .neq("sender_id", userId)
     .is("read_at", null);
+  if (!error) notifyUnreadChanged();
+}
+
+/**
+ * Okunmamış gelen mesaj sayısı.
+ * Kullanıcının sohbeti temizlediği (cleared_at) eski mesajlar sayılmaz.
+ */
+export async function loadUnreadMessages(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<{ total: number; byConversation: Record<string, number> }> {
+  const byConversation: Record<string, number> = {};
+
+  const { data: conversations } = await supabase
+    .from("conversations")
+    .select("id")
+    .or(`user_a.eq.${userId},user_b.eq.${userId}`);
+
+  const ids = ((conversations ?? []) as { id: string }[]).map((row) => row.id);
+  if (ids.length === 0) return { total: 0, byConversation };
+
+  const { data: states } = await supabase
+    .from("conversation_state")
+    .select("conversation_id, cleared_at")
+    .eq("user_id", userId);
+
+  const clearedAt = new Map<string, string>();
+  for (const state of (states ?? []) as { conversation_id: string; cleared_at: string | null }[]) {
+    if (state.cleared_at) clearedAt.set(state.conversation_id, state.cleared_at);
+  }
+
+  const { data: unread } = await supabase
+    .from("messages")
+    .select("conversation_id, created_at")
+    .in("conversation_id", ids)
+    .neq("sender_id", userId)
+    .is("read_at", null)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  for (const row of (unread ?? []) as { conversation_id: string; created_at: string }[]) {
+    const cleared = clearedAt.get(row.conversation_id);
+    if (cleared && new Date(row.created_at) <= new Date(cleared)) continue;
+    byConversation[row.conversation_id] = (byConversation[row.conversation_id] ?? 0) + 1;
+  }
+
+  const total = Object.values(byConversation).reduce((sum, value) => sum + value, 0);
+  return { total, byConversation };
 }
 
 export async function sendMessage(
@@ -426,11 +487,12 @@ export async function loadNotifications(
 }
 
 export async function markAllNotificationsRead(supabase: SupabaseClient, userId: string) {
-  await supabase
+  const { error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .eq("user_id", userId)
     .is("read_at", null);
+  if (!error) notifyNotificationChanged();
 }
 
 export function isOnline(lastSeen: string | null | undefined) {

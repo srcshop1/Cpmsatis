@@ -10,6 +10,7 @@ import { Logo } from "@/components/logo";
 import { AnnouncementBar } from "@/components/announcement-bar";
 import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { NOTIFICATION_EVENT } from "@/lib/social";
 
 export function SiteHeader() {
   const router = useRouter();
@@ -34,9 +35,22 @@ export function SiteHeader() {
     };
     void load();
     const timer = setInterval(load, 30000);
+
+    const onEvent = () => void load();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+
+    window.addEventListener(NOTIFICATION_EVENT, onEvent);
+    window.addEventListener("focus", onEvent);
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       cancelled = true;
       clearInterval(timer);
+      window.removeEventListener(NOTIFICATION_EVENT, onEvent);
+      window.removeEventListener("focus", onEvent);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [supabase, user]);
 
