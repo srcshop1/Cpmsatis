@@ -491,6 +491,10 @@ begin
   return new;
 end; $$;
 
+drop trigger if exists listings_block_banned on public.listings;
+create trigger listings_block_banned before insert on public.listings
+for each row execute function public.block_banned_listing();
+
 notify pgrst, 'reload schema';
 
 -- Kontrol: hepsi "ok" görünmeli
