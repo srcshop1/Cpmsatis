@@ -20,7 +20,14 @@ export type Message = {
   conversation_id: string;
   sender_id: string;
   body: string;
-  listing_ref: { id?: string; title?: string; price?: number; image?: string } | null;
+  listing_ref: {
+    id?: string;
+    title?: string;
+    price?: number;
+    image?: string;
+    kind?: string;
+  } | null;
+  read_at?: string | null;
   created_at: string;
 };
 
@@ -125,14 +132,27 @@ export async function loadMessages(
 ): Promise<Message[]> {
   let request = supabase
     .from("messages")
-    .select("id, conversation_id, sender_id, body, listing_ref, created_at")
+    .select("id, conversation_id, sender_id, body, listing_ref, read_at, created_at")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
     .limit(200);
 
   if (clearedAt) request = request.gt("created_at", clearedAt);
 
-  const { data } = await request;
+  let { data, error } = await request;
+
+  // Okundu bilgisi kolonu yoksa temel alanlarla devam et
+  if (error) {
+    let retry = supabase
+      .from("messages")
+      .select("id, conversation_id, sender_id, body, listing_ref, created_at")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true })
+      .limit(200);
+    if (clearedAt) retry = retry.gt("created_at", clearedAt);
+    data = (await retry).data as typeof data;
+  }
+
   return ((data ?? []) as Message[]).map((message) => ({
     ...message,
     listing_ref:
@@ -173,6 +193,20 @@ export async function findOrCreateConversation(
 
   if (error) return { conversationId: null, error: error.message };
   return { conversationId: created.id as string, error: null };
+}
+
+/** Karşı tarafın mesajlarını okundu olarak işaretler */
+export async function markMessagesRead(
+  supabase: SupabaseClient,
+  conversationId: string,
+  userId: string,
+) {
+  await supabase
+    .from("messages")
+    .update({ read_at: new Date().toISOString() })
+    .eq("conversation_id", conversationId)
+    .neq("sender_id", userId)
+    .is("read_at", null);
 }
 
 export async function sendMessage(

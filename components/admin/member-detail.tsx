@@ -208,7 +208,11 @@ export function MemberDetail({
                 <Info label="Başarılı işlem" value={String(profile.sales_count ?? 0)} />
                 <Info
                   label="Puan"
-                  value={`${Number(profile.rating ?? 0).toFixed(1)} (${profile.review_count ?? 0})`}
+                  value={
+                    (profile.review_count ?? 0) > 0
+                      ? `${Number(profile.rating ?? 0).toFixed(1)} (${profile.review_count})`
+                      : "Değerlendirme yok"
+                  }
                 />
                 <Info label="Çerçeve" value={findFrame(profile.equipped_frame).name} />
                 <Info label="Durum" value={profile.banned ? "Kısıtlı" : "Aktif"} />
