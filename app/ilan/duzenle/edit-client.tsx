@@ -18,7 +18,15 @@ import {
   MAX_LISTING_TITLE,
   listingCategories,
 } from "@/lib/catalog";
-import { LISTINGS_TABLE, LISTING_IMAGES_BUCKET } from "@/lib/listings";
+import {
+  LISTINGS_TABLE,
+  LISTING_IMAGES_BUCKET,
+  applyDiscount,
+  cancelDiscount,
+  discountOf,
+  loadDiscountQuota,
+  type DiscountQuota,
+} from "@/lib/listings";
 import { censorProfanity } from "@/lib/profanity";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -40,6 +48,11 @@ export function EditListingClient() {
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
   const [oldPrice, setOldPrice] = useState<number | null>(null);
+  const [originalPrice, setOriginalPrice] = useState<number | null>(null);
+  const [quota, setQuota] = useState<DiscountQuota | null>(null);
+  const [discountPrice, setDiscountPrice] = useState("");
+  const [discountBusy, setDiscountBusy] = useState(false);
+  const [discountNote, setDiscountNote] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -52,7 +65,7 @@ export function EditListingClient() {
     void (async () => {
       const { data, error: loadError } = await supabase
         .from(LISTINGS_TABLE)
-        .select("id,title,price,categories,category,images,description_html,seller_id")
+        .select("id,title,price,previous_price,categories,category,images,description_html,seller_id")
         .eq("id", listingId)
         .maybeSingle();
 
@@ -71,6 +84,7 @@ export function EditListingClient() {
         images: string[] | null;
         description_html: string | null;
         seller_id: string;
+        previous_price: number | null;
       };
 
       if (!user || row.seller_id !== user.id) {
@@ -81,11 +95,15 @@ export function EditListingClient() {
       setTitle(row.title);
       setPrice(String(row.price));
       setOldPrice(Number(row.price));
+      setOriginalPrice(row.previous_price ? Number(row.previous_price) : null);
       setImages(row.images ?? []);
       setCategories(
         row.categories && row.categories.length > 0 ? row.categories : [row.category].filter(Boolean),
       );
       setState("ready");
+
+      const current = await loadDiscountQuota(supabase);
+      if (!cancelled) setQuota(current);
 
       if (editorRef.current) {
         editorRef.current.innerHTML = sanitizeHtml(row.description_html ?? "");
@@ -123,6 +141,50 @@ export function EditListingClient() {
 
   function makeCover(url: string) {
     setImages((prev) => [url, ...prev.filter((item) => item !== url)]);
+  }
+
+  async function applyNow() {
+    if (!supabase || discountBusy) return;
+    const value = Number(discountPrice);
+    const base = originalPrice ?? Number(price);
+    if (!discountPrice || Number.isNaN(value) || value <= 0) {
+      setDiscountNote("Geçerli bir indirimli fiyat gir.");
+      return;
+    }
+    if (value >= base) {
+      setDiscountNote("İndirimli fiyat, mevcut fiyattan düşük olmalı.");
+      return;
+    }
+    setDiscountBusy(true);
+    setDiscountNote(null);
+    const result = await applyDiscount(supabase, listingId, Math.round(value));
+    setDiscountBusy(false);
+    if (result.error) {
+      setDiscountNote(result.error);
+      return;
+    }
+    setOriginalPrice(base);
+    setPrice(String(Math.round(value)));
+    setOldPrice(Math.round(value));
+    setQuota(result.quota);
+    setDiscountPrice("");
+    setDiscountNote("İndirim uygulandı.");
+  }
+
+  async function removeDiscount() {
+    if (!supabase || discountBusy || originalPrice === null) return;
+    setDiscountBusy(true);
+    setDiscountNote(null);
+    const error = await cancelDiscount(supabase, listingId);
+    setDiscountBusy(false);
+    if (error) {
+      setDiscountNote(error);
+      return;
+    }
+    setPrice(String(originalPrice));
+    setOldPrice(originalPrice);
+    setOriginalPrice(null);
+    setDiscountNote("İndirim kaldırıldı.");
   }
 
   async function save() {
@@ -201,7 +263,6 @@ export function EditListingClient() {
     }
   }
 
-  const dropped = oldPrice !== null && Number(price) < oldPrice;
 
   return (
     <AppShell>
@@ -214,7 +275,7 @@ export function EditListingClient() {
 
       <h1 className="mt-3 text-xl font-extrabold tracking-tight sm:text-2xl">İlanı Düzenle</h1>
       <p className="mt-1 text-xs text-muted-2 sm:text-sm">
-        Fiyatı düşürürsen ilanda “fiyat düştü” etiketi çıkar, favorileyenler görür.
+        Fiyatı değiştirebilir, dilersen indirim uygulayabilirsin. İndirimin aylık hakkı var.
       </p>
 
       {state === "loading" && (
@@ -414,12 +475,7 @@ export function EditListingClient() {
                   value={price}
                   onChange={(event) => setPrice(event.target.value)}
                 />
-                {dropped && (
-                  <p className="mt-1 text-[0.66rem] font-semibold text-mint">
-                    Fiyat düşüyor: {oldPrice?.toLocaleString("tr-TR")} →{" "}
-                    {Number(price).toLocaleString("tr-TR")} TL
-                  </p>
-                )}
+
               </div>
               <div>
                 <p className="mb-1.5 text-xs text-muted">Kategori</p>
@@ -448,6 +504,77 @@ export function EditListingClient() {
                 </div>
               </div>
             </div>
+          </section>
+
+          <section className="card p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold">İndirim</h2>
+              {quota && (
+                <span className="text-[0.64rem] text-muted-2">
+                  {quota.limit < 0
+                    ? "Sınırsız hak"
+                    : `Bu ay ${quota.used}/${quota.limit} kullandın`}
+                </span>
+              )}
+            </div>
+
+            {(() => {
+              const discount = discountOf({
+                price: Number(price),
+                previous_price: originalPrice,
+              });
+              return discount ? (
+                <div className="mt-2 rounded-xl border border-mint/40 bg-mint/10 px-3 py-2">
+                  <p className="text-[0.7rem] font-semibold text-mint">
+                    %{discount.percent} indirimde · eski fiyat{" "}
+                    {discount.original.toLocaleString("tr-TR")} TL
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void removeDiscount()}
+                    disabled={discountBusy}
+                    className="mt-1.5 rounded-lg border border-line bg-black/25 px-2 py-1 text-[0.64rem] font-semibold text-muted disabled:opacity-50"
+                  >
+                    İndirimi kaldır
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-1 text-[0.66rem] text-muted-2">
+                  İndirim uygularsan ilanda “%X indirim” etiketi çıkar.
+                </p>
+              );
+            })()}
+
+            <div className="mt-2 flex gap-1.5">
+              <input
+                className="field h-10 text-[0.8rem]"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                placeholder="İndirimli fiyat (TL)"
+                value={discountPrice}
+                onChange={(event) => setDiscountPrice(event.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => void applyNow()}
+                disabled={
+                  discountBusy ||
+                  (quota !== null && quota.remaining !== null && quota.remaining <= 0)
+                }
+                className="shrink-0 rounded-xl border border-mint/40 bg-mint/12 px-3 text-[0.72rem] font-semibold text-mint disabled:opacity-50"
+              >
+                {discountBusy ? "…" : "İndirim yap"}
+              </button>
+            </div>
+
+            {quota !== null && quota.remaining !== null && quota.remaining <= 0 && (
+              <p className="mt-1 text-[0.64rem] text-[#ffb3bb]">
+                Bu ayki indirim hakkın doldu. Gelecek ay yenilenir.
+              </p>
+            )}
+
+            {discountNote && <p className="mt-1 text-[0.66rem] text-accent">{discountNote}</p>}
           </section>
 
           {error && (

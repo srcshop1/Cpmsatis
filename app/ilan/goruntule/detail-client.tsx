@@ -37,7 +37,7 @@ import {
   loadRelatedListings,
   loadResponseMinutes,
   loadSellerListings,
-  priceDrop,
+  discountOf,
   responseLabel,
   registerListingView,
   renewListing,
@@ -581,11 +581,14 @@ export function ListingDetailClient() {
                   <Price value={listing.price} iconSize={20} />
                 </p>
                 {(() => {
-                  const drop = priceDrop(listing);
-                  if (!drop) return null;
+                  const discount = discountOf(listing);
+                  if (!discount) return null;
                   return (
                     <p className="mt-1 inline-flex items-center gap-1 rounded-md border border-mint/40 bg-mint/10 px-1.5 py-0.5 text-[0.6rem] font-bold text-mint">
-                      FİYAT DÜŞTÜ · <span className="line-through opacity-70">{drop.previous.toLocaleString("tr-TR")}</span>
+                      %{discount.percent} İNDİRİM ·{" "}
+                      <span className="line-through opacity-70">
+                        {discount.original.toLocaleString("tr-TR")}
+                      </span>
                     </p>
                   );
                 })()}

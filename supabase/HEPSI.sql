@@ -1383,6 +1383,145 @@ $$;
 grant execute on function public.seller_response_minutes(uuid) to anon, authenticated;
 
 
+-- ---------- 5t) İNDİRİMLİ FİYAT (aylık hak) ----------
+-- Fiyat geçmişi otomatik takibi kapatıldı; indirim artık elle ve kontenjanlı.
+drop trigger if exists listings_track_price on public.listings;
+drop function if exists public.track_listing_price();
+
+create table if not exists public.listing_discounts (
+  id uuid primary key default gen_random_uuid(),
+  listing_id uuid not null references public.listings (id) on delete cascade,
+  seller_id uuid not null references public.profiles (id) on delete cascade,
+  old_price numeric not null,
+  new_price numeric not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists listing_discounts_seller_idx
+  on public.listing_discounts (seller_id, created_at desc);
+create index if not exists listing_discounts_listing_idx
+  on public.listing_discounts (listing_id);
+
+alter table public.listing_discounts enable row level security;
+
+drop policy if exists listing_discounts_read on public.listing_discounts;
+create policy listing_discounts_read on public.listing_discounts
+  for select using (seller_id = auth.uid() or public.is_staff());
+
+-- Aylık indirim hakkı: herkes 2, premium 4, VIP 6, moderatör 6, kurucu sınırsız (-1)
+create or replace function public.my_discount_limit()
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_role text;
+begin
+  if auth.uid() is null then return 0; end if;
+
+  select role into v_role from public.user_roles where user_id = auth.uid();
+  if v_role = 'owner' then return -1; end if;
+  if v_role = 'moderator' then return 6; end if;
+
+  if exists (select 1 from public.user_tags where user_id = auth.uid() and tag = 'vip') then
+    return 6;
+  end if;
+  if exists (select 1 from public.user_tags where user_id = auth.uid() and tag = 'premium') then
+    return 4;
+  end if;
+  return 2;
+end; $$;
+grant execute on function public.my_discount_limit() to authenticated;
+
+-- Bu ay kaç indirim kullandım?
+create or replace function public.my_discount_usage()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_limit integer; v_used integer;
+begin
+  if auth.uid() is null then
+    return jsonb_build_object('limit', 0, 'used', 0, 'remaining', 0);
+  end if;
+
+  v_limit := public.my_discount_limit();
+  select count(*) into v_used
+    from public.listing_discounts
+   where seller_id = auth.uid()
+     and created_at >= date_trunc('month', now());
+
+  return jsonb_build_object(
+    'limit', v_limit,
+    'used', v_used,
+    'remaining', case when v_limit < 0 then null else greatest(0, v_limit - v_used) end
+  );
+end; $$;
+grant execute on function public.my_discount_usage() to authenticated;
+
+-- İndirimi uygula (hakkı düşer)
+create or replace function public.apply_listing_discount(p_listing uuid, p_price numeric)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_row record;
+  v_limit integer;
+  v_used integer;
+  v_old numeric;
+begin
+  if auth.uid() is null then raise exception 'Giriş yapmalısın'; end if;
+
+  select id, seller_id, price, previous_price into v_row
+    from public.listings where id = p_listing;
+  if v_row is null then raise exception 'İlan bulunamadı'; end if;
+  if v_row.seller_id <> auth.uid() then
+    raise exception 'Sadece kendi ilanına indirim yapabilirsin';
+  end if;
+  if p_price is null or p_price < 0 then raise exception 'Geçersiz fiyat'; end if;
+
+  v_old := coalesce(v_row.previous_price, v_row.price);
+  if p_price >= v_old then
+    raise exception 'İndirimli fiyat eski fiyattan düşük olmalı';
+  end if;
+
+  v_limit := public.my_discount_limit();
+  select count(*) into v_used
+    from public.listing_discounts
+   where seller_id = auth.uid()
+     and created_at >= date_trunc('month', now());
+
+  if v_limit >= 0 and v_used >= v_limit then
+    raise exception 'Bu ayki indirim hakkın doldu';
+  end if;
+
+  update public.listings
+     set price = p_price,
+         previous_price = v_old,
+         price_dropped_at = now()
+   where id = p_listing;
+
+  insert into public.listing_discounts (listing_id, seller_id, old_price, new_price)
+  values (p_listing, auth.uid(), v_old, p_price);
+
+  return jsonb_build_object(
+    'limit', v_limit,
+    'used', v_used + 1,
+    'remaining', case when v_limit < 0 then null else greatest(0, v_limit - v_used - 1) end
+  );
+end; $$;
+grant execute on function public.apply_listing_discount(uuid, numeric) to authenticated;
+
+-- İndirimi geri al (hak geri gelmez)
+create or replace function public.cancel_listing_discount(p_listing uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'Giriş yapmalısın'; end if;
+  update public.listings
+     set price = coalesce(previous_price, price),
+         previous_price = null,
+         price_dropped_at = null
+   where id = p_listing and seller_id = auth.uid();
+  if not found then raise exception 'İlan bulunamadı'; end if;
+end; $$;
+grant execute on function public.cancel_listing_discount(uuid) to authenticated;
+
+-- Eski otomatik fiyat geçmişi kayıtlarını temizle (yanlış indirim görünmesin)
+update public.listings set previous_price = null, price_dropped_at = null
+ where price_dropped_at is not null
+   and not exists (select 1 from public.listing_discounts d where d.listing_id = listings.id);
+
+
 -- ============================================================
 --  SON KONTROL — hepsi "var" görünmeli
 -- ============================================================
@@ -1394,7 +1533,7 @@ where schemaname = 'public'
   and tablename in ('profiles','listings','user_roles','user_tags','user_frames','notifications',
                     'conversations','conversation_state','messages','sales','reviews',
                     'support_tickets','seller_applications','featured_requests','reports',
-                    'announcements','user_blocks','listing_favorites','user_notes')
+                    'announcements','user_blocks','listing_favorites','user_notes','listing_discounts')
 union all
 select 'fonksiyon: ' || proname, 'var'
 from pg_proc
@@ -1406,7 +1545,8 @@ where pronamespace = 'public'::regnamespace
                   'admin_notify','is_blocked_between','reply_review','admin_delete_review',
                   'admin_clear_reviews','admin_set_sales_count','admin_sync_sales_count','send_message',
                   'admin_clear_conversation','after_review_delete','increment_listing_view',
-                  'toggle_listing_favorite','seller_response_minutes')
+                  'toggle_listing_favorite','seller_response_minutes','my_discount_limit',
+                  'my_discount_usage','apply_listing_discount','cancel_listing_discount')
 union all
 select 'depo: ' || id, 'var' from storage.buckets where id in ('avatars','listing-images')
 order by 1;

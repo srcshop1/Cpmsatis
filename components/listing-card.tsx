@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CheckIcon, StarIcon } from "@/components/icons";
 import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
-import { categoryLabel, isFeatured, priceDrop, type Listing } from "@/lib/listings";
+import { categoryLabel, discountOf, isFeatured, type Listing } from "@/lib/listings";
 import { Price } from "@/components/price";
 
 export function ListingCard({ listing }: { listing: Listing }) {
@@ -50,11 +50,15 @@ export function ListingCard({ listing }: { listing: Listing }) {
           )}
         </span>
 
-        {priceDrop(listing) && (
-          <span className="absolute bottom-2 left-2 badge border border-mint/50 bg-mint/85 text-[0.55rem] font-bold text-ink">
-            FİYAT DÜŞTÜ
-          </span>
-        )}
+        {(() => {
+          const discount = discountOf(listing);
+          if (!discount) return null;
+          return (
+            <span className="absolute bottom-2 left-2 badge border border-mint/50 bg-mint/85 text-[0.55rem] font-bold text-ink">
+              %{discount.percent} İNDİRİM
+            </span>
+          );
+        })()}
 
         {isFeatured(listing) && (
           <span className="absolute right-2 top-2 badge border border-[#93c5fd]/50 bg-[#2563eb] text-[0.62rem] font-bold text-white">
