@@ -5,10 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAuth } from "@/components/auth/auth-provider";
-import { MessageIcon, PlusIcon, TrashIcon } from "@/components/icons";
+import { CheckIcon, MessageIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   loadConversations,
+  loadUnreadMessages,
   markAllConversationsRead,
   saveConversationState,
   timeAgo,
@@ -25,6 +26,7 @@ export default function MessagesPage() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [allReadNotice, setAllReadNotice] = useState(false);
+  const [unread, setUnread] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!supabase || !user) return;
@@ -66,6 +68,10 @@ export default function MessagesPage() {
             last_message: (previews.get(row.id) as never) ?? null,
           })),
       );
+      const unreadResult = await loadUnreadMessages(supabase, user.id);
+      if (cancelled) return;
+      setUnread(unreadResult.byConversation);
+
       setLoading(false);
     };
 
@@ -84,6 +90,7 @@ export default function MessagesPage() {
       conversations.map((row) => row.id),
     );
     setMarkingAll(false);
+    setUnread({});
     setAllReadNotice(true);
     setTimeout(() => setAllReadNotice(false), 2500);
   }
@@ -95,31 +102,38 @@ export default function MessagesPage() {
       cleared_at: new Date().toISOString(),
     });
     setConversations((prev) => prev.filter((row) => row.id !== conversationId));
+    setUnread((prev) => {
+      const next = { ...prev };
+      delete next[conversationId];
+      return next;
+    });
   }
 
   return (
     <AppShell>
       <div className="flex items-end justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">Mesajlar</h1>
-          <p className="mt-1 text-xs text-muted-2 sm:text-sm">Satıcı ve alıcı sohbetlerin</p>
+          <p className="mt-1 truncate text-xs text-muted-2 sm:text-sm">Satıcı ve alıcı sohbetlerin</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {!loading && conversations.length > 0 && (
-            <button
-              type="button"
-              onClick={markAllRead}
-              disabled={markingAll}
-              className="btn btn-ghost h-8 px-2.5 text-[0.68rem] text-muted-2 disabled:opacity-60"
-            >
-              Tümünü okundu
-            </button>
-          )}
-          <Link href="/ilanlar" className="btn btn-ghost h-9 px-3 text-xs">
-            <PlusIcon width={15} height={15} /> Yeni sohbet
-          </Link>
-        </div>
+        <Link href="/ilanlar" className="btn btn-ghost h-9 shrink-0 whitespace-nowrap px-3 text-xs">
+          <PlusIcon width={15} height={15} /> Yeni sohbet
+        </Link>
       </div>
+
+      {!loading && conversations.length > 0 && (
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={markAllRead}
+            disabled={markingAll}
+            className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-full border border-line bg-white/4 px-2.5 text-[0.64rem] font-semibold text-muted-2 transition hover:text-text disabled:opacity-60"
+          >
+            <CheckIcon width={11} height={11} />
+            {markingAll ? "İşaretleniyor…" : "Tümünü okundu"}
+          </button>
+        </div>
+      )}
 
       {allReadNotice && (
         <p className="mt-3 rounded-lg border border-line bg-white/4 px-3 py-2 text-[0.7rem] text-muted">
@@ -187,8 +201,15 @@ export default function MessagesPage() {
                           engelli
                         </span>
                       )}
-                      <span className="ml-auto shrink-0 text-[0.62rem] text-muted-2">
-                        {preview ? timeAgo(preview.created_at) : ""}
+                      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                        {unread[conversation.id] > 0 && (
+                          <span className="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.55rem] font-bold leading-none text-ink">
+                            {unread[conversation.id] > 9 ? "9+" : unread[conversation.id]}
+                          </span>
+                        )}
+                        <span className="text-[0.62rem] text-muted-2">
+                          {preview ? timeAgo(preview.created_at) : ""}
+                        </span>
                       </span>
                     </span>
                     <span className="mt-0.5 block truncate text-[0.75rem] text-muted-2">

@@ -11,6 +11,7 @@ import { resolveSales } from "@/lib/sales";
 import {
   loadNotifications,
   markAllNotificationsRead,
+  notifyNotificationChanged,
   timeAgo,
   type Notification,
 } from "@/lib/social";
@@ -54,6 +55,7 @@ export default function NotificationsPage() {
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, read_at: new Date().toISOString() } : item)),
     );
+    notifyNotificationChanged();
   }
 
   async function markAll() {
@@ -103,6 +105,7 @@ export default function NotificationsPage() {
     const removed = new Set(selected);
     setItems((prev) => prev.filter((item) => !removed.has(item.id)));
     stopSelect();
+    notifyNotificationChanged();
   }
 
   const unread = items.filter((item) => !item.read_at).length;
