@@ -6,7 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth/auth-provider";
 import { CheckIcon, StarIcon, XIcon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
-import { formatPrice } from "@/lib/catalog";
+import { Price } from "@/components/price";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { createReview, loadSales, resolveSales, type Sale } from "@/lib/sales";
 
@@ -178,7 +178,7 @@ export default function OrdersPage() {
                       {sale.listing?.title ?? "İlan"}
                     </Link>
                     <span className="shrink-0 text-sm font-bold text-accent">
-                      {sale.listing ? formatPrice(sale.listing.price) : ""}
+                      {sale.listing ? <Price value={sale.listing.price} iconSize={11} /> : ""}
                     </span>
                   </div>
 

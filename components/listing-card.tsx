@@ -4,7 +4,7 @@ import Link from "next/link";
 import { CheckIcon, StarIcon } from "@/components/icons";
 import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
 import { categoryLabel, isFeatured, type Listing } from "@/lib/listings";
-import { formatPrice } from "@/lib/catalog";
+import { Price } from "@/components/price";
 
 export function ListingCard({ listing }: { listing: Listing }) {
   const cover = listing.images?.[0];
@@ -62,7 +62,9 @@ export function ListingCard({ listing }: { listing: Listing }) {
           {listing.title}
         </h3>
 
-        <p className="mt-2 text-[1rem] font-extrabold text-accent">{formatPrice(listing.price)}</p>
+        <p className="mt-2 text-[1rem] font-extrabold text-accent">
+          <Price value={listing.price} iconSize={14} />
+        </p>
 
         <div className="mt-2 border-t border-line-soft/70 pt-2 text-[0.68rem] text-muted-2">
           <div className="flex items-center gap-1.5">

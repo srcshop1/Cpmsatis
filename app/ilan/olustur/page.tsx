@@ -98,7 +98,7 @@ export default function CreateListingPage() {
       return;
     }
     if (numericPrice > MAX_LISTING_PRICE) {
-      setError(`Fiyat en fazla ${MAX_LISTING_PRICE.toLocaleString("tr-TR")} ₺ olabilir.`);
+      setError(`Fiyat en fazla ${MAX_LISTING_PRICE.toLocaleString("tr-TR")} TL olabilir.`);
       return;
     }
     if (hasProfanity(cleanTitle)) {
@@ -331,7 +331,7 @@ export default function CreateListingPage() {
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="listing-price" className="mb-1.5 block text-xs text-muted">
-                Fiyat (₺)
+                Fiyat (TL)
               </label>
               <input
                 id="listing-price"
@@ -345,7 +345,7 @@ export default function CreateListingPage() {
                 placeholder="0"
               />
               <p className="mt-1 text-[0.64rem] text-muted-2">
-                En fazla {MAX_LISTING_PRICE.toLocaleString("tr-TR")} ₺ · sitede ödeme alınmaz
+                En fazla {MAX_LISTING_PRICE.toLocaleString("tr-TR")} TL · sitede ödeme alınmaz
               </p>
             </div>
             <div>

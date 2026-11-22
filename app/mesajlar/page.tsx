@@ -9,6 +9,7 @@ import { MessageIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   loadConversations,
+  markAllConversationsRead,
   saveConversationState,
   timeAgo,
   type Conversation,
@@ -22,6 +23,8 @@ export default function MessagesPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [markingAll, setMarkingAll] = useState(false);
+  const [allReadNotice, setAllReadNotice] = useState(false);
 
   useEffect(() => {
     if (!supabase || !user) return;
@@ -72,6 +75,19 @@ export default function MessagesPage() {
     };
   }, [supabase, user]);
 
+  async function markAllRead() {
+    if (!supabase || !user || markingAll) return;
+    setMarkingAll(true);
+    await markAllConversationsRead(
+      supabase,
+      user.id,
+      conversations.map((row) => row.id),
+    );
+    setMarkingAll(false);
+    setAllReadNotice(true);
+    setTimeout(() => setAllReadNotice(false), 2500);
+  }
+
   async function clearChat(conversationId: string) {
     if (!supabase || !user) return;
     setConfirmId(null);
@@ -88,10 +104,28 @@ export default function MessagesPage() {
           <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">Mesajlar</h1>
           <p className="mt-1 text-xs text-muted-2 sm:text-sm">Satıcı ve alıcı sohbetlerin</p>
         </div>
-        <Link href="/ilanlar" className="btn btn-ghost h-9 px-3 text-xs">
-          <PlusIcon width={15} height={15} /> Yeni sohbet
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          {!loading && conversations.length > 0 && (
+            <button
+              type="button"
+              onClick={markAllRead}
+              disabled={markingAll}
+              className="btn btn-ghost h-8 px-2.5 text-[0.68rem] text-muted-2 disabled:opacity-60"
+            >
+              Tümünü okundu
+            </button>
+          )}
+          <Link href="/ilanlar" className="btn btn-ghost h-9 px-3 text-xs">
+            <PlusIcon width={15} height={15} /> Yeni sohbet
+          </Link>
+        </div>
       </div>
+
+      {allReadNotice && (
+        <p className="mt-3 rounded-lg border border-line bg-white/4 px-3 py-2 text-[0.7rem] text-muted">
+          Tüm mesajlar okundu olarak işaretlendi.
+        </p>
+      )}
 
       {loading && (
         <div className="mt-5 space-y-2">

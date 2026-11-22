@@ -16,7 +16,8 @@ import {
   StarIcon,
   XIcon,
 } from "@/components/icons";
-import { formatPrice } from "@/lib/catalog";
+import { Price } from "@/components/price";
+import { formatPriceLabel } from "@/lib/catalog";
 import {
   LISTING_LIFETIME_DAYS,
   LISTINGS_TABLE,
@@ -214,7 +215,7 @@ export function ListingDetailClient() {
     }
 
     const prefix = "Şu ilanla ilgileniyorum;";
-    const body = `${prefix}\n${listing.title} — ${formatPrice(listing.price)}\n\n${contactText.trim()}`;
+    const body = `${prefix}\n${listing.title} — ${formatPriceLabel(listing.price)}\n\n${contactText.trim()}`;
     const result = await sendMessage(supabase, {
       conversationId,
       senderId: user.id,
@@ -451,7 +452,7 @@ export function ListingDetailClient() {
                 </h1>
               </div>
               <p className="shrink-0 text-xl font-extrabold text-accent">
-                {formatPrice(listing.price)}
+                <Price value={listing.price} iconSize={20} />
               </p>
             </div>
 
@@ -790,7 +791,7 @@ export function ListingDetailClient() {
                 <img src={listing.images[0]} alt="" className="h-11 w-11 rounded-lg object-cover" />
                 <div className="min-w-0">
                   <p className="truncate text-[0.78rem] font-semibold">{listing.title}</p>
-                  <p className="text-[0.68rem] text-muted-2">{formatPrice(listing.price)}</p>
+                  <p className="text-[0.68rem] text-muted-2"><Price value={listing.price} iconSize={11} /></p>
                 </div>
               </div>
             )}
