@@ -1,6 +1,7 @@
 "use client";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { PROFANITY_MESSAGE, hasProfanity } from "@/lib/profanity";
 
 export type SaleStatus = "pending_buyer" | "confirmed" | "approved" | "declined" | "cancelled";
 
@@ -203,6 +204,7 @@ export async function createReview(
     comment: string;
   },
 ): Promise<{ error: string | null }> {
+  if (hasProfanity(input.comment)) return { error: PROFANITY_MESSAGE };
   const { error } = await supabase.from("reviews").insert({
     sale_id: input.saleId,
     listing_id: input.listingId,

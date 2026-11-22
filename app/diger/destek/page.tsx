@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth/auth-provider";
 import { CheckIcon, ChevronLeftIcon, HeadsetIcon } from "@/components/icons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { PROFANITY_MESSAGE, hasProfanity } from "@/lib/profanity";
 
 export default function SupportPage() {
   const router = useRouter();
@@ -25,6 +26,10 @@ export default function SupportPage() {
     }
     if (description.trim().length < 20) {
       setError("Açıklama en az 20 karakter olmalı, lütfen detay ver.");
+      return;
+    }
+    if (hasProfanity(title) || hasProfanity(description)) {
+      setError(PROFANITY_MESSAGE);
       return;
     }
     setError(null);
