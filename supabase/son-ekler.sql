@@ -159,7 +159,6 @@ begin
 end; $$;
 grant execute on function public.admin_clear_conversation(uuid) to authenticated;
 
-
 -- ---------- 5p) DEĞERLENDİRME SİLİNİNCE PUAN DÜZELTME ----------
 create or replace function public.after_review_delete()
 returns trigger language plpgsql security definer set search_path = public as $$
@@ -185,9 +184,10 @@ where coalesce(p.review_count, 0) <> (
    or (select count(*) from public.reviews r where r.seller_id = p.id) = 0
       and coalesce(p.rating, 0) <> 0;
 
-
 -- ---------- 5q) YETKİLİ: HESAP SİLME (giriş hesabı dahil) ----------
 -- Hesabı sil (giriş hesabı + profil + ilanlar + mesajlar + tüm veriler)
+drop function if exists public.admin_delete_account(uuid);
+
 create or replace function public.admin_delete_account(p_user uuid)
 returns void language plpgsql security definer set search_path = public, auth as $$
 declare v_role text;
@@ -212,7 +212,6 @@ begin
   delete from public.profiles where id = p_user;
 end; $$;
 grant execute on function public.admin_delete_account(uuid) to authenticated;
-
 
 -- ---------- 5r) İLAN: GÖRÜNTÜLENME + FAVORİ ----------
 alter table public.listings add column if not exists view_count integer not null default 0;
@@ -826,6 +825,8 @@ create policy account_cleanup_read on public.account_cleanup for select using (p
 
 -- Hesabı sil: profil + tüm veriler, ardından giriş hesabı.
 -- Dönen değer: 'tam' (hepsi silindi) veya 'profil' (giriş kaydı kaldı)
+drop function if exists public.admin_delete_account(uuid);
+
 create or replace function public.admin_delete_account(p_user uuid)
 returns text language plpgsql security definer set search_path = public, auth as $$
 declare v_role text;
@@ -984,6 +985,8 @@ end; $$;
 grant execute on function public.expire_bans() to authenticated;
 
 -- Askıya al: p_days null/0 ise kalıcı, değilse günlük
+drop function if exists public.admin_set_banned(uuid, boolean);
+
 create or replace function public.admin_set_banned(
   p_user uuid,
   p_banned boolean,
