@@ -27,6 +27,12 @@ export type Message = {
     image?: string;
     kind?: string;
   } | null;
+  reply_to?: {
+    id?: string;
+    username?: string;
+    body?: string;
+    kind?: string;
+  } | null;
   read_at?: string | null;
   created_at: string;
 };
@@ -132,7 +138,7 @@ export async function loadMessages(
 ): Promise<Message[]> {
   let request = supabase
     .from("messages")
-    .select("id, conversation_id, sender_id, body, listing_ref, read_at, created_at")
+    .select("id, conversation_id, sender_id, body, listing_ref, reply_to, read_at, created_at")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
     .limit(200);
@@ -141,7 +147,7 @@ export async function loadMessages(
 
   let { data, error } = await request;
 
-  // Okundu bilgisi kolonu yoksa temel alanlarla devam et
+  // Yeni kolonlar yoksa temel alanlarla devam et
   if (error) {
     let retry = supabase
       .from("messages")
@@ -216,18 +222,29 @@ export async function sendMessage(
     senderId: string;
     body: string;
     listingRef?: Message["listing_ref"];
+    replyTo?: Message["reply_to"];
   },
 ): Promise<{ error: string | null }> {
   const body = input.body.trim();
   if (!body) return { error: "Mesaj boş olamaz." };
   if (body.length > 4000) return { error: "Mesaj çok uzun." };
 
-  const { error } = await supabase.from("messages").insert({
+  const payload = {
     conversation_id: input.conversationId,
     sender_id: input.senderId,
     body,
     listing_ref: input.listingRef ?? null,
-  });
+  };
+
+  let { error } = await supabase
+    .from("messages")
+    .insert({ ...payload, reply_to: input.replyTo ?? null });
+
+  // Yanıt kolonu yoksa alıntısız gönder
+  if (error) {
+    const retry = await supabase.from("messages").insert(payload);
+    error = retry.error;
+  }
 
   if (error) {
     if (error.code === "42501") return { error: "Bu sohbete mesaj gönderemiyorsun." };

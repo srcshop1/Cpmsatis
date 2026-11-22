@@ -225,6 +225,7 @@ create table if not exists public.messages (
   sender_id uuid not null references public.profiles (id) on delete cascade,
   body text not null check (char_length(body) between 1 and 4000),
   listing_ref jsonb,
+  reply_to jsonb,
   read_at timestamptz,
   created_at timestamptz not null default now()
 );
@@ -904,6 +905,9 @@ update public.profiles p
          0
        ),
        review_count = (select count(*) from public.reviews r where r.seller_id = p.id);
+
+-- ---------- 5f) MESAJ YANITI (ALINTI) ----------
+alter table public.messages add column if not exists reply_to jsonb;
 
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';

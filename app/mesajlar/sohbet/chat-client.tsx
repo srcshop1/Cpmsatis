@@ -110,7 +110,11 @@ export function ChatClient() {
   const [pickerLoading, setPickerLoading] = useState(false);
   const [pickerRows, setPickerRows] = useState<PickListing[]>([]);
   const [uploading, setUploading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const touchStart = useRef<{ id: string; x: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -190,7 +194,9 @@ export function ChatClient() {
   }, [supabase, conversation, clearedAt]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
   }, [messages.length]);
 
   async function handleSend() {
@@ -205,6 +211,20 @@ export function ChatClient() {
       conversationId: conversation.id,
       senderId: user.id,
       body,
+      replyTo: replyTo
+        ? {
+            id: replyTo.id,
+            username:
+              replyTo.sender_id === user.id
+                ? user.username ?? "sen"
+                : other?.username ?? "kullanıcı",
+            body:
+              replyTo.listing_ref?.kind === "image"
+                ? "Görsel"
+                : replyTo.listing_ref?.title ?? replyTo.body,
+            kind: replyTo.listing_ref?.kind === "image" ? "image" : replyTo.listing_ref?.kind ?? "text",
+          }
+        : null,
     });
     if (result.error) {
       setDraft(body);
@@ -212,7 +232,17 @@ export function ChatClient() {
       return;
     }
     setError(null);
+    setReplyTo(null);
     setMessages(await loadMessages(supabase, conversation.id, clearedAt));
+  }
+
+  function jumpToMessage(id?: string) {
+    if (!id) return;
+    const element = document.getElementById(`msg-${id}`);
+    if (!element) return;
+    element.scrollIntoView({ block: "center", behavior: "smooth" });
+    setHighlightId(id);
+    window.setTimeout(() => setHighlightId(null), 1400);
   }
 
   async function sendImage(file: File) {
@@ -225,7 +255,7 @@ export function ChatClient() {
     setError(null);
     try {
       const blob = await prepareAvatar(file, 1280, 0.82);
-      const path = `chat/${user.id}/${Date.now()}-${Math.random()
+      const path = `${user.id}/chat/${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 8)}.jpg`;
       const { error: uploadError } = await supabase.storage
@@ -443,7 +473,10 @@ export function ChatClient() {
           </div>
         )}
 
-        <div className="mt-3 min-h-[45vh] space-y-2 rounded-2xl border border-line-soft bg-black/20 p-3">
+        <div
+          ref={listRef}
+          className="mt-3 h-[52vh] min-h-[260px] space-y-2 overflow-y-auto overscroll-contain rounded-2xl border border-line-soft bg-black/20 p-3 sm:h-[56vh]"
+        >
           {loading && <p className="py-8 text-center text-xs text-muted-2">Yükleniyor…</p>}
 
           {!loading && messages.length === 0 && (
@@ -455,29 +488,56 @@ export function ChatClient() {
           {messages.map((message) => {
             const mine = message.sender_id === user?.id;
             const ref = message.listing_ref;
+            const quote = message.reply_to;
+            const dragging = drag?.id === message.id ? drag.dx : 0;
+            const highlighted = highlightId === message.id;
             return (
-              <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+              <div
+                key={message.id}
+                id={`msg-${message.id}`}
+                className={`flex ${mine ? "justify-end" : "justify-start"}`}
+                onTouchStart={(event) => {
+                  touchStart.current = { id: message.id, x: event.touches[0].clientX };
+                }}
+                onTouchMove={(event) => {
+                  const start = touchStart.current;
+                  if (!start || start.id !== message.id) return;
+                  const dx = event.touches[0].clientX - start.x;
+                  if (dx < -6) setDrag({ id: message.id, dx: Math.max(dx, -70) });
+                }}
+                onTouchEnd={() => {
+                  if (drag && drag.id === message.id && drag.dx <= -44) setReplyTo(message);
+                  setDrag(null);
+                  touchStart.current = null;
+                }}
+              >
                 <div
-                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-[0.82rem] leading-relaxed ${
+                  style={dragging !== 0 ? { transform: `translateX(${dragging}px)` } : undefined}
+                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-[0.82rem] leading-relaxed transition-transform ${
                     mine
-                      ? "rounded-br-md bg-accent/90 text-ink"
+                      ? "rounded-br-md bg-gradient-to-br from-[#3b82f6] to-[#1d4ed8] text-white"
                       : "rounded-bl-md border border-line bg-surface-2 text-text"
-                  }`}
+                  } ${highlighted ? "ring-2 ring-accent/70" : ""}`}
                 >
-                  {ref?.title && (
-                    <span
-                      className={`mb-1.5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[0.66rem] ${
-                        mine ? "bg-black/15" : "bg-white/5"
+                  {(quote?.body || quote?.kind) && (
+                    <button
+                      type="button"
+                      onClick={() => jumpToMessage(quote?.id)}
+                      className={`mb-1.5 block w-full overflow-hidden rounded-lg border-l-2 px-2 py-1 text-left text-[0.66rem] ${
+                        mine
+                          ? "border-white/70 bg-black/20 text-white/85"
+                          : "border-accent/70 bg-white/5 text-muted"
                       }`}
                     >
-                      <span className="truncate">{ref.title}</span>
-                      {typeof ref.price === "number" && (
-                        <span className="ml-auto shrink-0 font-semibold">
-                          {formatPrice(ref.price)}
-                        </span>
-                      )}
-                    </span>
+                      <span className="block truncate font-semibold">
+                        @{quote?.username ?? "kullanıcı"}
+                      </span>
+                      <span className="block truncate opacity-80">
+                        {quote?.kind === "image" ? "📷 Görsel" : quote?.body}
+                      </span>
+                    </button>
                   )}
+
                   {ref?.kind === "image" && ref.image ? (
                     <a href={ref.image} target="_blank" rel="noreferrer" className="block">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -488,12 +548,44 @@ export function ChatClient() {
                         loading="lazy"
                       />
                     </a>
+                  ) : ref?.title ? (
+                    <a
+                      href={ref.id ? `/ilan/goruntule?id=${ref.id}` : undefined}
+                      className={`mb-0.5 flex items-center gap-2 rounded-lg p-1.5 ${
+                        mine ? "bg-black/20" : "bg-white/5"
+                      }`}
+                    >
+                      {ref.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={ref.image}
+                          alt=""
+                          className="h-11 w-11 shrink-0 rounded-md object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-black/25">
+                          🖼️
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[0.72rem] font-semibold">
+                          {ref.title}
+                        </span>
+                        {typeof ref.price === "number" && (
+                          <span className="block text-[0.68rem] font-bold">
+                            {formatPrice(ref.price)}
+                          </span>
+                        )}
+                      </span>
+                    </a>
                   ) : (
                     <span className="whitespace-pre-wrap break-words">{message.body}</span>
                   )}
+
                   <span
                     className={`float-right ml-1.5 mt-1 inline-flex items-center gap-1 rounded-full px-1 text-[0.52rem] leading-none ${
-                      mine ? "bg-black/25 text-white/65" : "text-muted-2"
+                      mine ? "bg-black/25 text-white/70" : "text-muted-2"
                     }`}
                   >
                     {timeAgo(message.created_at)}
@@ -503,10 +595,42 @@ export function ChatClient() {
               </div>
             );
           })}
-          <div ref={bottomRef} />
         </div>
 
         {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+
+        {replyTo ? (
+          <div className="mt-2 flex items-center gap-2 rounded-xl border border-line bg-white/4 px-3 py-2">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent/15 text-[0.8rem] text-accent">
+              ↩
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[0.66rem] font-semibold text-accent">
+                @
+                {replyTo.sender_id === user?.id
+                  ? user?.username ?? "sen"
+                  : other?.username ?? "kullanıcı"}
+              </span>
+              <span className="block truncate text-[0.7rem] text-muted">
+                {replyTo.listing_ref?.kind === "image"
+                  ? "📷 Görsel"
+                  : replyTo.listing_ref?.title ?? replyTo.body}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-muted-2 transition hover:text-text"
+              aria-label="Yanıtı kaldır"
+            >
+              <XIcon width={14} height={14} />
+            </button>
+          </div>
+        ) : (
+          <p className="mt-2 text-[0.62rem] text-muted-2">
+            Yanıtlamak için mesajı sola kaydır.
+          </p>
+        )}
 
         {plusOpen && (
           <div className="mt-2 flex gap-2">

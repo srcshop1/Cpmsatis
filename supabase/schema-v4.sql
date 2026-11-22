@@ -282,6 +282,9 @@ update public.profiles p
        ),
        review_count = (select count(*) from public.reviews r where r.seller_id = p.id);
 
+-- ---------- 5f) MESAJ YANITI (ALINTI) ----------
+alter table public.messages add column if not exists reply_to jsonb;
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 
