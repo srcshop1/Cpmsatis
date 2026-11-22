@@ -1840,6 +1840,147 @@ end; $$;
 grant execute on function public.admin_set_sale_counted(uuid, boolean) to authenticated;
 
 
+-- ---------- 5w) HESAP SİLME (doğrulamalı) + EKSİK GİRİŞ TEMİZLİĞİ ----------
+create table if not exists public.account_cleanup (
+  user_id uuid primary key,
+  created_at timestamptz not null default now()
+);
+alter table public.account_cleanup enable row level security;
+drop policy if exists account_cleanup_read on public.account_cleanup;
+create policy account_cleanup_read on public.account_cleanup for select using (public.is_staff());
+
+-- Hesabı sil: profil + tüm veriler, ardından giriş hesabı.
+-- Dönen değer: 'tam' (hepsi silindi) veya 'profil' (giriş kaydı kaldı)
+create or replace function public.admin_delete_account(p_user uuid)
+returns text language plpgsql security definer set search_path = public, auth as $$
+declare v_role text;
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+  if p_user = auth.uid() then raise exception 'Kendi hesabını silemezsin'; end if;
+
+  select role into v_role from public.user_roles where user_id = p_user;
+  if v_role = 'owner' then raise exception 'Kurucu hesabı silinemez'; end if;
+  if v_role = 'moderator' and public.my_staff_role() <> 'owner' then
+    raise exception 'Yetkili hesabını sadece kurucu silebilir';
+  end if;
+
+  -- Giriş hesabı önce silinirse profil cascade ile gider; olmazsa profili elle sil
+  begin
+    delete from auth.users where id = p_user;
+  exception when others then
+    null;
+  end;
+
+  delete from public.profiles where id = p_user;
+
+  if exists (select 1 from auth.users where id = p_user) then
+    insert into public.account_cleanup (user_id) values (p_user)
+    on conflict (user_id) do nothing;
+  else
+    delete from public.account_cleanup where user_id = p_user;
+  end if;
+
+  if exists (select 1 from public.profiles where id = p_user) then
+    raise exception 'Hesap silinemedi';
+  end if;
+
+  return case when exists (select 1 from auth.users where id = p_user) then 'profil' else 'tam' end;
+end; $$;
+grant execute on function public.admin_delete_account(uuid) to authenticated;
+
+-- Profili olmayan (silinmiş ama giriş kaydı kalmış) hesapları temizle
+create or replace function public.admin_purge_orphan_accounts()
+returns integer language plpgsql security definer set search_path = public, auth as $$
+declare v_count integer := 0;
+begin
+  if public.my_staff_role() is distinct from 'owner' then
+    raise exception 'Sadece kurucu temizleyebilir';
+  end if;
+
+  delete from auth.users u
+   where not exists (select 1 from public.profiles p where p.id = u.id)
+     and u.id <> auth.uid();
+
+  get diagnostics v_count = row_count;
+  delete from public.account_cleanup c
+   where not exists (select 1 from auth.users u where u.id = c.user_id);
+
+  return v_count;
+end; $$;
+grant execute on function public.admin_purge_orphan_accounts() to authenticated;
+
+-- Satış sayılırken ek sinyal: son 30 günde yeni hesaplardan gelen işlemler
+create or replace function public.settle_sale(p_sale uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_sale public.sales;
+  v_age interval;
+  v_pair integer;
+  v_day integer;
+  v_fresh integer;
+  v_flags text[] := '{}';
+  v_title text;
+begin
+  select * into v_sale from public.sales where id = p_sale;
+  if v_sale is null then raise exception 'Satış bulunamadı'; end if;
+  if v_sale.status = 'approved' then return; end if;
+
+  select now() - created_at into v_age from public.profiles where id = v_sale.buyer_id;
+
+  select count(*) into v_pair from public.sales
+   where seller_id = v_sale.seller_id and buyer_id = v_sale.buyer_id
+     and status = 'approved' and counted
+     and created_at > now() - interval '30 days';
+
+  select count(*) into v_day from public.sales
+   where seller_id = v_sale.seller_id and status = 'approved' and counted
+     and coalesce(approved_at, created_at) > now() - interval '1 day';
+
+  -- Alıcı hesabı satış anında 30 günden genç olan sayılan işlemler
+  select count(*) into v_fresh
+    from public.sales s
+    join public.profiles p on p.id = s.buyer_id
+   where s.seller_id = v_sale.seller_id
+     and s.status = 'approved' and s.counted
+     and s.created_at > now() - interval '30 days'
+     and p.created_at > s.created_at - interval '30 days';
+
+  if v_age is not null and v_age < interval '7 days' then
+    v_flags := array_append(v_flags, 'alıcı hesabı yeni');
+  end if;
+  if v_pair >= 2 then
+    v_flags := array_append(v_flags, 'aynı çift çok işlem');
+  end if;
+  if v_day >= 8 then
+    v_flags := array_append(v_flags, 'günlük satış sınırı');
+  end if;
+  if v_fresh >= 3 then
+    v_flags := array_append(v_flags, 'yeni hesaplardan işlem');
+  end if;
+
+  select title into v_title from public.listings where id = v_sale.listing_id;
+
+  update public.sales
+     set status = 'approved',
+         approved_at = now(),
+         counted = (coalesce(array_length(v_flags, 1), 0) = 0),
+         flag_reason = case when coalesce(array_length(v_flags, 1), 0) = 0 then null
+                            else array_to_string(v_flags, ', ') end
+   where id = p_sale;
+
+  perform public.recalc_sales_count(v_sale.seller_id);
+
+  perform public.notify(v_sale.seller_id, 'sale', 'Satış tamamlandı',
+    v_title || case when coalesce(array_length(v_flags, 1), 0) = 0
+                    then ' satışı onaylandı. Başarılı işlem sayın arttı.'
+                    else ' satışı onaylandı fakat incelemeye alındı.' end,
+    '/profil');
+  perform public.notify(v_sale.buyer_id, 'review', 'Siparişi değerlendir',
+    v_title || ' için satıcıyı değerlendir.', '/siparisler');
+end; $$;
+grant execute on function public.settle_sale(uuid) to authenticated;
+
+
 -- ============================================================
 --  SON KONTROL — hepsi "var" görünmeli
 -- ============================================================
@@ -1866,7 +2007,7 @@ where pronamespace = 'public'::regnamespace
                   'toggle_listing_favorite','seller_response_minutes','my_discount_limit',
                   'my_discount_usage','apply_listing_discount','cancel_listing_discount',
                   'recalc_seller_rating','admin_set_review_status','settle_sale',
-                  'recalc_sales_count','admin_set_sale_counted')
+                  'recalc_sales_count','admin_set_sale_counted','admin_purge_orphan_accounts')
 union all
 select 'depo: ' || id, 'var' from storage.buckets where id in ('avatars','listing-images')
 order by 1;

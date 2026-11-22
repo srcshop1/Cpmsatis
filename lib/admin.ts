@@ -105,20 +105,40 @@ export async function syncMemberSalesCount(
 export async function deleteAccountAsStaff(
   supabase: SupabaseClient,
   userId: string,
-): Promise<{ error: string | null }> {
-  const { error } = await supabase.rpc("admin_delete_account", { p_user: userId });
-  if (!error) return { error: null };
+): Promise<{ error: string | null; partial?: boolean }> {
+  const { data, error } = await supabase.rpc("admin_delete_account", { p_user: userId });
 
-  if (/kurucu|kendi hesab/i.test(error.message)) {
-    return { error: error.message };
+  if (error) {
+    if (/kurucu|kendi hesab/i.test(error.message)) {
+      return { error: error.message };
+    }
+    if (!missingFunction(error.message)) {
+      return { error: "Hesap silinemedi. Tekrar dene." };
+    }
   }
 
-  if (missingFunction(error.message)) {
+  if (error && missingFunction(error.message)) {
     const fallback = await supabase.from("profiles").delete().eq("id", userId);
-    if (!fallback.error) return { error: null };
+    if (fallback.error) return { error: "Hesap silinemedi. Tekrar dene." };
   }
 
-  return { error: "Hesap silinemedi." };
+  // Gerçekten silindi mi? Kontrol et.
+  const { data: row } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (row) return { error: "Hesap silinemedi. Tekrar dene." };
+
+  return { error: null, partial: data === "profil" };
+}
+
+/** Profili silinmiş ama giriş kaydı kalmış hesapları temizler. */
+export async function purgeOrphanAccounts(supabase: SupabaseClient): Promise<number | null> {
+  const { data, error } = await supabase.rpc("admin_purge_orphan_accounts");
+  if (error) return null;
+  return Number(data ?? 0);
 }
 
 /** İlanı kaldırır (yetkili). */

@@ -250,6 +250,9 @@ export function MemberDetail({
       setNotice(result.error);
       return;
     }
+    if (result.partial) {
+      setNotice("Hesap silindi. Kalan giriş kaydı panelden temizlenebilir.");
+    }
     onDeleted?.();
   }
 

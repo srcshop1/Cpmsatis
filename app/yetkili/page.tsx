@@ -19,6 +19,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ReasonDialog } from "@/components/admin/reason-dialog";
 import { MemberDetail } from "@/components/admin/member-detail";
 import { MemberSearch, type MemberHit } from "@/components/admin/member-search";
+import { deleteAccountAsStaff, purgeOrphanAccounts } from "@/lib/admin";
 import { BADGES, badgeLabel } from "@/lib/badges";
 import { AdminReviewList } from "@/components/admin/review-admin";
 import { ProfileEditor } from "@/components/admin/profile-editor";
@@ -797,9 +798,11 @@ export default function AdminPage() {
 
     if (action === "delete") {
       setBusy(userId);
-      const { error } = await supabase.rpc("admin_delete_account", { p_user: userId });
-      errorText = error?.message ?? null;
-      message = "Hesap silindi.";
+      const result = await deleteAccountAsStaff(supabase, userId);
+      errorText = result.error;
+      message = result.partial
+        ? "Hesap silindi. Kalan giriş kaydı için temizlik yapabilirsin."
+        : "Hesap silindi.";
     } else if (action === "demote") {
       const { error } = await supabase.rpc("admin_remove_role", { p_user: userId });
       errorText = error?.message ?? null;
@@ -1591,6 +1594,31 @@ export default function AdminPage() {
               onChange={(event) => setMemberQuery(event.target.value)}
               placeholder="Üye ara (kullanıcı adı)"
             />
+
+            {role === "owner" && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!supabase) return;
+                  setBusy("purge");
+                  setNotice(null);
+                  const removed = await purgeOrphanAccounts(supabase);
+                  setBusy(null);
+                  setNotice(
+                    removed === null
+                      ? "Temizlik yapılamadı."
+                      : removed > 0
+                        ? `${removed} eksik giriş kaydı temizlendi.`
+                        : "Temizlenecek kayıt yok.",
+                  );
+                  await loadTab();
+                }}
+                disabled={busy === "purge"}
+                className="chip px-2.5 py-1.5 text-[0.66rem]"
+              >
+                {busy === "purge" ? "Temizleniyor…" : "Silinmiş hesapların giriş kayıtlarını temizle"}
+              </button>
+            )}
             {members.length === 0 && <Empty text="Üye yok." />}
             {members
               .filter((member) =>
