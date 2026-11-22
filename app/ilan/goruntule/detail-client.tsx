@@ -10,12 +10,18 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ClockIcon,
+  CopyIcon,
+  EyeIcon,
+  HeartIcon,
   MessageIcon,
+  ShareIcon,
   ShieldIcon,
   TrashIcon,
   StarIcon,
+  WhatsAppIcon,
   XIcon,
 } from "@/components/icons";
+import { ListingCard } from "@/components/listing-card";
 import { Price } from "@/components/price";
 import { formatPriceLabel } from "@/lib/catalog";
 import {
@@ -23,8 +29,15 @@ import {
   LISTINGS_TABLE,
   categoryLabel,
   daysLeft,
+  isListingFavorited,
   listingExpiresAt,
+  loadListingCounters,
+  loadRelatedListings,
+  loadSellerListings,
+  registerListingView,
   renewListing,
+  toggleListingFavorite,
+  type Listing,
   type ListingSeller,
 } from "@/lib/listings";
 import { FramedAvatar, StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
@@ -50,6 +63,8 @@ type Detail = {
   created_at: string;
   featured_until: string | null;
   seller_id: string;
+  view_count?: number | null;
+  favorite_count?: number | null;
 };
 
 const REVIEW_ROWS = [
@@ -90,6 +105,13 @@ export function ListingDetailClient() {
   const [featuredBusy, setFeaturedBusy] = useState(false);
   const [featuredPending, setFeaturedPending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [views, setViews] = useState(0);
+  const [favorites, setFavorites] = useState(0);
+  const [favorited, setFavorited] = useState(false);
+  const [favBusy, setFavBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [related, setRelated] = useState<Listing[]>([]);
+  const [sellerListings, setSellerListings] = useState<Listing[]>([]);
 
   const isOwner = Boolean(user && listing && user.id === listing.seller_id);
 
@@ -107,7 +129,7 @@ export function ListingDetailClient() {
 
       let queryResult = await supabase
         .from(LISTINGS_TABLE)
-        .select(`${baseColumns},categories`)
+        .select(`${baseColumns},categories,view_count,favorite_count`)
         .eq("id", listingId)
         .maybeSingle();
 
@@ -144,6 +166,46 @@ export function ListingDetailClient() {
 
       const detail = data as unknown as Detail;
       setListing(detail);
+      setViews(Number(detail.view_count ?? 0));
+      setFavorites(Number(detail.favorite_count ?? 0));
+
+      // Görüntülenme: sahibi hariç, aynı kişi 6 saatte bir sayılır
+      if (user?.id !== detail.seller_id) {
+        void registerListingView(supabase, detail.id).then((total) => {
+          if (!cancelled && total !== null) setViews(total);
+        });
+      } else {
+        void loadListingCounters(supabase, detail.id).then((counters) => {
+          if (!cancelled) {
+            setViews(counters.views);
+            setFavorites(counters.favorites);
+          }
+        });
+      }
+
+      const cats =
+        detail.categories && detail.categories.length > 0
+          ? detail.categories
+          : [detail.category].filter(Boolean);
+
+      void loadSellerListings(supabase, { sellerId: detail.seller_id, excludeId: detail.id, limit: 6 })
+        .then((rows) => {
+          if (!cancelled) setSellerListings(rows);
+        });
+      void loadRelatedListings(supabase, {
+        categories: cats,
+        excludeId: detail.id,
+        sellerId: detail.seller_id,
+        limit: 6,
+      }).then((rows) => {
+        if (!cancelled) setRelated(rows);
+      });
+
+      if (user?.id) {
+        void isListingFavorited(supabase, user.id, detail.id).then((value) => {
+          if (!cancelled) setFavorited(value);
+        });
+      }
 
       const profiles = await loadProfileMini(supabase, [detail.seller_id]);
       if (cancelled) return;
@@ -168,7 +230,7 @@ export function ListingDetailClient() {
     return () => {
       cancelled = true;
     };
-  }, [supabase, listingId]);
+  }, [supabase, listingId, user?.id]);
 
   useEffect(() => {
     if (tab !== "listing" || !supabase || !listing) return;
@@ -196,6 +258,45 @@ export function ListingDetailClient() {
       return;
     }
     setContactOpen(true);
+  }
+
+  async function toggleFavorite() {
+    if (!user) {
+      router.push("/giris");
+      return;
+    }
+    if (!supabase || !listing || favBusy) return;
+    setFavBusy(true);
+    const result = await toggleListingFavorite(supabase, user.id, listing.id);
+    setFavBusy(false);
+    if (result.error || result.favorited === null) {
+      setNotice(result.error ?? "Favori kaydedilemedi.");
+      return;
+    }
+    setFavorited(result.favorited);
+    setFavorites((prev) => Math.max(0, prev + (result.favorited ? 1 : -1)));
+  }
+
+  function listingUrl() {
+    if (typeof window === "undefined") return "";
+    return `${window.location.origin}${window.location.pathname}?id=${listingId}`;
+  }
+
+  function shareOnWhatsApp() {
+    if (!listing) return;
+    const text = `${listing.title} · ${formatPriceLabel(listing.price)}\n${listingUrl()}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  }
+
+  async function copyLink() {
+    const url = listingUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setNotice("Link kopyalanamadı.");
+    }
   }
 
   async function sendContactMessage() {
@@ -473,7 +574,46 @@ export function ListingDetailClient() {
                 {daysLeft(listing.created_at)} gün kaldı ·{" "}
                 {listingExpiresAt(listing.created_at).toLocaleDateString("tr-TR")} tarihinde kalkar
               </span>
+              <span className="inline-flex items-center gap-1">
+                <EyeIcon width={12} height={12} /> {views} görüntülenme
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <HeartIcon width={12} height={12} /> {favorites} favori
+              </span>
             </p>
+
+            {!isOwner && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => void toggleFavorite()}
+                  disabled={favBusy}
+                  className={`flex h-10 items-center justify-center gap-1.5 rounded-xl border text-[0.75rem] font-semibold transition disabled:opacity-60 ${
+                    favorited
+                      ? "border-[#ff7b8a]/50 bg-[#ff7b8a]/12 text-[#ff9ba5]"
+                      : "border-line bg-white/4 text-muted hover:text-text"
+                  }`}
+                >
+                  <HeartIcon width={15} height={15} filled={favorited} />
+                  {favorited ? "Favorilerimde" : "Favorile"}
+                </button>
+                <button
+                  type="button"
+                  onClick={shareOnWhatsApp}
+                  className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-mint/40 bg-mint/10 text-[0.75rem] font-semibold text-mint transition hover:bg-mint/20"
+                >
+                  <WhatsAppIcon width={15} height={15} /> Paylaş
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyLink()}
+                  className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-line bg-white/4 text-[0.75rem] font-semibold text-muted transition hover:text-text"
+                >
+                  {copied ? <CheckIcon width={15} height={15} /> : <CopyIcon width={15} height={15} />}
+                  {copied ? "Kopyalandı" : "Link"}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="card p-4">
@@ -486,9 +626,12 @@ export function ListingDetailClient() {
                 rounded="rounded-xl"
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[0.95rem] font-bold">
+                <Link
+                  href={`/satici?id=${listing.seller_id}`}
+                  className="block truncate text-[0.95rem] font-bold hover:text-accent"
+                >
                   @{seller?.username ?? "satıcı"}
-                </p>
+                </Link>
 
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   {seller?.verified_seller && <VerifiedBadge small />}
@@ -514,6 +657,13 @@ export function ListingDetailClient() {
                 </p>
               </div>
             </div>
+
+            <Link
+              href={`/satici?id=${listing.seller_id}`}
+              className="mt-2 inline-flex items-center gap-1 text-[0.68rem] font-semibold text-accent hover:underline"
+            >
+              Satıcı vitrinini gör <ChevronRightIcon width={12} height={12} />
+            </Link>
 
             {isOwner ? (
               <div className="mt-3 space-y-2"
@@ -694,6 +844,56 @@ export function ListingDetailClient() {
               ))}
             </div>
           </div>
+
+          {sellerListings.length > 0 && (
+            <div className="card p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-bold">Satıcının diğer ilanları</h2>
+                <Link
+                  href={`/satici?id=${listing.seller_id}`}
+                  className="text-[0.68rem] font-semibold text-accent hover:underline"
+                >
+                  Tümü
+                </Link>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                {sellerListings.map((item) => (
+                  <ListingCard key={item.id} listing={item} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {related.length > 0 && (
+            <div className="card p-4">
+              <h2 className="text-sm font-bold">Benzer ilanlar</h2>
+              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                {related.map((item) => (
+                  <ListingCard key={item.id} listing={item} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!isOwner && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={shareOnWhatsApp}
+                className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-mint/40 bg-mint/10 text-[0.75rem] font-semibold text-mint transition hover:bg-mint/20"
+              >
+                <ShareIcon width={15} height={15} /> WhatsApp'ta paylaş
+              </button>
+              <button
+                type="button"
+                onClick={() => void copyLink()}
+                className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-line bg-white/4 text-[0.75rem] font-semibold text-muted transition hover:text-text"
+              >
+                {copied ? <CheckIcon width={15} height={15} /> : <CopyIcon width={15} height={15} />}
+                {copied ? "Link kopyalandı" : "Linki kopyala"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

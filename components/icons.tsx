@@ -304,3 +304,40 @@ export function UsersIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function HeartIcon({ filled = false, ...props }: IconProps & { filled?: boolean }) {
+  return (
+    <svg {...base(props)} fill={filled ? "currentColor" : "none"}>
+      <path d="M12 20.4s-7.6-4.6-7.6-9.6A4.4 4.4 0 0 1 12 8.1a4.4 4.4 0 0 1 7.6 2.7c0 5-7.6 9.6-7.6 9.6Z" />
+    </svg>
+  );
+}
+
+export function ShareIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="18" cy="5.6" r="2.6" />
+      <circle cx="6" cy="12" r="2.6" />
+      <circle cx="18" cy="18.4" r="2.6" />
+      <path d="m8.3 10.7 7.4-3.8M8.3 13.3l7.4 3.8" />
+    </svg>
+  );
+}
+
+export function CopyIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <rect x="9" y="9" width="11.5" height="11.5" rx="2.2" />
+      <path d="M15 6.5V5.6A2.1 2.1 0 0 0 12.9 3.5H5.6A2.1 2.1 0 0 0 3.5 5.6v7.3A2.1 2.1 0 0 0 5.6 15h.9" />
+    </svg>
+  );
+}
+
+export function WhatsAppIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M20.5 11.7a8.4 8.4 0 0 1-12.4 7.4L3.5 20.5l1.4-4.5a8.4 8.4 0 1 1 15.6-4.3Z" />
+      <path d="M8.6 8.4c.3-.6.6-.6 1-.6h.5c.2 0 .4.1.6.5l.6 1.4c.1.3 0 .5-.2.7l-.4.4c-.2.2-.2.4-.1.6.5.9 1.4 1.8 2.4 2.2.2.1.4.1.6-.1l.4-.4c.2-.2.4-.3.7-.2l1.4.6c.3.1.4.3.4.5v.5c0 .4-.2.9-.6 1.1-.5.3-1.1.5-1.8.4-2.9-.5-5.2-2.8-5.6-5.6-.1-.6 0-1.3.3-1.9Z" />
+    </svg>
+  );
+}

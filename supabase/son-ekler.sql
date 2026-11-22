@@ -214,6 +214,88 @@ end; $$;
 grant execute on function public.admin_delete_account(uuid) to authenticated;
 
 
+-- ---------- 5r) İLAN: GÖRÜNTÜLENME + FAVORİ ----------
+alter table public.listings add column if not exists view_count integer not null default 0;
+alter table public.listings add column if not exists favorite_count integer not null default 0;
+
+create table if not exists public.listing_favorites (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  listing_id uuid not null references public.listings (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, listing_id)
+);
+create index if not exists listing_favorites_listing_idx
+  on public.listing_favorites (listing_id);
+
+alter table public.listing_favorites enable row level security;
+
+drop policy if exists listing_favorites_read on public.listing_favorites;
+create policy listing_favorites_read on public.listing_favorites
+  for select using (user_id = auth.uid() or public.is_staff());
+
+drop policy if exists listing_favorites_add on public.listing_favorites;
+create policy listing_favorites_add on public.listing_favorites
+  for insert with check (user_id = auth.uid());
+
+drop policy if exists listing_favorites_remove on public.listing_favorites;
+create policy listing_favorites_remove on public.listing_favorites
+  for delete using (user_id = auth.uid());
+
+-- Favori sayısını ilanın üzerinde tut
+create or replace function public.sync_listing_favorite_count()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_listing uuid;
+begin
+  v_listing := coalesce(new.listing_id, old.listing_id);
+  update public.listings l
+     set favorite_count = (select count(*) from public.listing_favorites f where f.listing_id = v_listing)
+   where l.id = v_listing;
+  return coalesce(new, old);
+end; $$;
+
+drop trigger if exists listing_favorites_count on public.listing_favorites;
+create trigger listing_favorites_count
+  after insert or delete on public.listing_favorites
+  for each row execute function public.sync_listing_favorite_count();
+
+-- Görüntülenme sayacı (giriş yapmadan da çalışır)
+create or replace function public.increment_listing_view(p_listing uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer;
+begin
+  update public.listings
+     set view_count = coalesce(view_count, 0) + 1
+   where id = p_listing
+  returning view_count into v_count;
+  return coalesce(v_count, 0);
+end; $$;
+grant execute on function public.increment_listing_view(uuid) to anon, authenticated;
+
+-- Favoriye ekle / çıkar (true = eklendi)
+create or replace function public.toggle_listing_favorite(p_listing uuid)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare v_exists boolean;
+begin
+  if auth.uid() is null then raise exception 'Favorilemek için giriş yapmalısın'; end if;
+
+  select exists(
+    select 1 from public.listing_favorites
+     where user_id = auth.uid() and listing_id = p_listing
+  ) into v_exists;
+
+  if v_exists then
+    delete from public.listing_favorites
+     where user_id = auth.uid() and listing_id = p_listing;
+    return false;
+  end if;
+
+  insert into public.listing_favorites (user_id, listing_id)
+  values (auth.uid(), p_listing)
+  on conflict (user_id, listing_id) do nothing;
+  return true;
+end; $$;
+grant execute on function public.toggle_listing_favorite(uuid) to authenticated;
+
 -- Önbelleği yenile
 notify pgrst, 'reload schema';
 
@@ -223,8 +305,17 @@ from pg_proc
 where pronamespace = 'public'::regnamespace
   and proname in ('admin_delete_review','admin_clear_reviews','admin_set_sales_count',
                   'admin_sync_sales_count','send_message','admin_clear_conversation',
-                  'after_review_delete','admin_delete_account')
+                  'after_review_delete','admin_delete_account',
+                  'increment_listing_view','toggle_listing_favorite')
 order by 1;
+
+select 'kolon: listings.view_count/favorite_count' as kontrol,
+       (select 'var' from information_schema.columns
+         where table_schema = 'public' and table_name = 'listings' and column_name = 'favorite_count') as durum;
+
+select 'tablo: listing_favorites' as kontrol,
+       (select 'var' from information_schema.tables
+         where table_schema = 'public' and table_name = 'listing_favorites') as durum;
 
 select 'kolon: reports.admin_note' as kontrol,
        (select 'var' from information_schema.columns

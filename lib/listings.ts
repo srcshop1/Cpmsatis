@@ -26,6 +26,8 @@ export type Listing = {
   featured_until: string | null;
   created_at: string;
   seller_id: string;
+  view_count?: number | null;
+  favorite_count?: number | null;
   seller: ListingSeller | null;
 };
 
@@ -45,7 +47,7 @@ export const LISTING_LIFETIME_DAYS = 15;
 export const LISTING_IMAGES_BUCKET = "listing-images";
 
 const LISTING_COLUMNS =
-  "id,title,price,category,categories,images,featured_until,created_at,seller_id";
+  "id,title,price,category,categories,images,featured_until,created_at,seller_id,view_count,favorite_count";
 
 export function isFeatured(listing: Listing) {
   return Boolean(listing.featured_until && new Date(listing.featured_until) > new Date());
@@ -183,4 +185,160 @@ export async function touchLastSeen(supabase: SupabaseClient, userId: string) {
     .from("profiles")
     .update({ last_seen_at: new Date().toISOString() })
     .eq("id", userId);
+}
+
+/** İlanın görüntülenme ve favori sayısını getirir. */
+export async function loadListingCounters(
+  supabase: SupabaseClient,
+  listingId: string,
+): Promise<{ views: number; favorites: number }> {
+  const { data, error } = await supabase
+    .from(LISTINGS_TABLE)
+    .select("view_count,favorite_count")
+    .eq("id", listingId)
+    .maybeSingle();
+
+  if (error || !data) return { views: 0, favorites: 0 };
+  const row = data as unknown as { view_count?: number | null; favorite_count?: number | null };
+  return { views: Number(row.view_count ?? 0), favorites: Number(row.favorite_count ?? 0) };
+}
+
+/** Görüntülenmeyi bir kez sayar (aynı kişi 6 saatte bir). */
+export async function registerListingView(
+  supabase: SupabaseClient,
+  listingId: string,
+): Promise<number | null> {
+  const key = `cpmsatis:view:${listingId}`;
+  try {
+    const last = Number(window.localStorage.getItem(key) ?? 0);
+    if (last && Date.now() - last < 6 * 60 * 60 * 1000) return null;
+  } catch {
+    // localStorage kapalıysa sayaç yine çalışsın
+  }
+
+  const { data, error } = await supabase.rpc("increment_listing_view", {
+    p_listing: listingId,
+  });
+  if (error) return null;
+
+  try {
+    window.localStorage.setItem(key, String(Date.now()));
+  } catch {
+    // yoksay
+  }
+  return Number(data ?? 0);
+}
+
+/** Kullanıcının bu ilanı favorileyip favorilemediği. */
+export async function isListingFavorited(
+  supabase: SupabaseClient,
+  userId: string,
+  listingId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("listing_favorites")
+    .select("listing_id")
+    .eq("user_id", userId)
+    .eq("listing_id", listingId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
+/** Favoriye ekler / çıkarır. */
+export async function toggleListingFavorite(
+  supabase: SupabaseClient,
+  userId: string,
+  listingId: string,
+): Promise<{ favorited: boolean | null; error: string | null }> {
+  const { data, error } = await supabase.rpc("toggle_listing_favorite", {
+    p_listing: listingId,
+  });
+  if (!error) return { favorited: Boolean(data), error: null };
+
+  // Fonksiyon kurulmamışsa tabloya doğrudan yaz
+  if (/could not find the function|schema cache|does not exist/i.test(error.message)) {
+    const existing = await supabase
+      .from("listing_favorites")
+      .select("listing_id")
+      .eq("user_id", userId)
+      .eq("listing_id", listingId)
+      .maybeSingle();
+
+    if (existing.data) {
+      const removed = await supabase
+        .from("listing_favorites")
+        .delete()
+        .eq("user_id", userId)
+        .eq("listing_id", listingId);
+      return removed.error ? { favorited: null, error: "Favori kaldırılamadı." } : { favorited: false, error: null };
+    }
+
+    const added = await supabase
+      .from("listing_favorites")
+      .insert({ user_id: userId, listing_id: listingId });
+    return added.error ? { favorited: null, error: "Favoriye eklenemedi." } : { favorited: true, error: null };
+  }
+
+  return { favorited: null, error: "Favori kaydedilemedi." };
+}
+
+/** Benzer ilanlar: aynı kategoriden, kendisi ve satıcısı hariç. */
+export async function loadRelatedListings(
+  supabase: SupabaseClient,
+  input: { categories: string[]; excludeId: string; sellerId: string; limit?: number },
+): Promise<Listing[]> {
+  const limit = input.limit ?? 6;
+  let request = supabase
+    .from(LISTINGS_TABLE)
+    .select(LISTING_COLUMNS)
+    .eq("status", "active")
+    .neq("id", input.excludeId)
+    .neq("seller_id", input.sellerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (input.categories.length > 0) request = request.overlaps("categories", input.categories);
+
+  const { data, error } = await request;
+  if (error) return [];
+  return attachSellers(supabase, (data ?? []) as unknown as Omit<Listing, "seller">[]);
+}
+
+/** Satıcının diğer ilanları. */
+export async function loadSellerListings(
+  supabase: SupabaseClient,
+  input: { sellerId: string; excludeId?: string; limit?: number },
+): Promise<Listing[]> {
+  const limit = input.limit ?? 12;
+  let request = supabase
+    .from(LISTINGS_TABLE)
+    .select(LISTING_COLUMNS)
+    .eq("status", "active")
+    .eq("seller_id", input.sellerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (input.excludeId) request = request.neq("id", input.excludeId);
+
+  const { data, error } = await request;
+  if (error) return [];
+  return attachSellers(supabase, (data ?? []) as unknown as Omit<Listing, "seller">[]);
+}
+
+async function attachSellers(
+  supabase: SupabaseClient,
+  rows: Omit<Listing, "seller">[],
+): Promise<Listing[]> {
+  if (rows.length === 0) return [];
+  const ids = Array.from(new Set(rows.map((row) => row.seller_id)));
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, username, avatar_url, sales_count, rating, review_count, verified_seller, staff_tag, equipped_frame, last_seen_at")
+    .in("id", ids);
+
+  const sellers = new Map<string, ListingSeller>();
+  for (const profile of (data ?? []) as unknown as ListingSeller[]) {
+    sellers.set(profile.id, profile);
+  }
+  return rows.map((row) => ({ ...row, seller: sellers.get(row.seller_id) ?? null }));
 }
