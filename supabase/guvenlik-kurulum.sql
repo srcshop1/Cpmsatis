@@ -367,6 +367,8 @@ alter table public.account_cleanup enable row level security;
 drop policy if exists account_cleanup_read on public.account_cleanup;
 create policy account_cleanup_read on public.account_cleanup for select using (public.is_staff());
 
+drop function if exists public.admin_delete_account(uuid);
+
 create or replace function public.admin_delete_account(p_user uuid)
 returns text language plpgsql security definer set search_path = public, auth as $$
 declare v_role text;
@@ -448,6 +450,8 @@ begin
   return v_count;
 end; $$;
 grant execute on function public.expire_bans() to authenticated;
+
+drop function if exists public.admin_set_banned(uuid, boolean);
 
 create or replace function public.admin_set_banned(
   p_user uuid,

@@ -645,7 +645,6 @@ where pronamespace = 'public'::regnamespace
                   'buyer_confirm','approve_sale','resolve_sales','admin_set_tag','admin_set_role')
 order by 1;
 
-
 -- ============================================================
 --  v4 EKLENTİLERİ
 -- ============================================================
@@ -690,6 +689,8 @@ end; $$;
 grant execute on function public.admin_remove_role(uuid) to authenticated;
 
 -- Ban / ban kaldır
+drop function if exists public.admin_set_banned(uuid, boolean);
+
 create or replace function public.admin_set_banned(p_user uuid, p_banned boolean)
 returns void language plpgsql security definer set search_path = public as $$
 begin
@@ -706,6 +707,8 @@ end; $$;
 grant execute on function public.admin_set_banned(uuid, boolean) to authenticated;
 
 -- Hesabı sil (giriş hesabı + profil + ilanlar + mesajlar + tüm veriler)
+drop function if exists public.admin_delete_account(uuid);
+
 create or replace function public.admin_delete_account(p_user uuid)
 returns void language plpgsql security definer set search_path = public, auth as $$
 declare v_role text;
@@ -1317,7 +1320,6 @@ begin
 end; $$;
 grant execute on function public.toggle_listing_favorite(uuid) to authenticated;
 
-
 -- ---------- 5s) FİYAT GEÇMİŞİ / ROZET / NOTLAR / YANIT SÜRESİ ----------
 -- Fiyat düşünce eski fiyat saklanır (ilan altında "fiyat düştü" etiketi)
 alter table public.listings add column if not exists previous_price numeric;
@@ -1381,7 +1383,6 @@ returns integer language sql security definer set search_path = public as $$
   select case when count(*) = 0 then null else round(avg(mins))::int end from r;
 $$;
 grant execute on function public.seller_response_minutes(uuid) to anon, authenticated;
-
 
 -- ---------- 5t) İNDİRİMLİ FİYAT (aylık hak) ----------
 -- Fiyat geçmişi otomatik takibi kapatıldı; indirim artık elle ve kontenjanlı.
@@ -1520,7 +1521,6 @@ grant execute on function public.cancel_listing_discount(uuid) to authenticated;
 update public.listings set previous_price = null, price_dropped_at = null
  where price_dropped_at is not null
    and not exists (select 1 from public.listing_discounts d where d.listing_id = listings.id);
-
 
 -- ---------- 5u) SAHTE DEĞERLENDİRME KORUMASI ----------
 alter table public.reviews add column if not exists status text not null default 'approved';
@@ -1693,7 +1693,6 @@ begin
   return v_count;
 end; $$;
 
-
 -- ---------- 5v) SAHTE BAŞARILI İŞLEM KORUMASI ----------
 alter table public.sales add column if not exists counted boolean not null default true;
 alter table public.sales add column if not exists flag_reason text;
@@ -1839,7 +1838,6 @@ begin
 end; $$;
 grant execute on function public.admin_set_sale_counted(uuid, boolean) to authenticated;
 
-
 -- ---------- 5w) HESAP SİLME (doğrulamalı) + EKSİK GİRİŞ TEMİZLİĞİ ----------
 create table if not exists public.account_cleanup (
   user_id uuid primary key,
@@ -1851,6 +1849,8 @@ create policy account_cleanup_read on public.account_cleanup for select using (p
 
 -- Hesabı sil: profil + tüm veriler, ardından giriş hesabı.
 -- Dönen değer: 'tam' (hepsi silindi) veya 'profil' (giriş kaydı kaldı)
+drop function if exists public.admin_delete_account(uuid);
+
 create or replace function public.admin_delete_account(p_user uuid)
 returns text language plpgsql security definer set search_path = public, auth as $$
 declare v_role text;
@@ -1980,7 +1980,6 @@ begin
 end; $$;
 grant execute on function public.settle_sale(uuid) to authenticated;
 
-
 -- ---------- 5x) ASKIYA ALMA (SÜRELİ / KALICI) + ARD ARDA YENİ HESAP KURALI ----------
 alter table public.profiles add column if not exists banned_until timestamptz;
 alter table public.profiles add column if not exists ban_reason text;
@@ -2010,6 +2009,8 @@ end; $$;
 grant execute on function public.expire_bans() to authenticated;
 
 -- Askıya al: p_days null/0 ise kalıcı, değilse günlük
+drop function if exists public.admin_set_banned(uuid, boolean);
+
 create or replace function public.admin_set_banned(
   p_user uuid,
   p_banned boolean,
@@ -2208,7 +2209,6 @@ begin
     v_title || ' için satıcıyı değerlendir.', '/siparisler');
 end; $$;
 grant execute on function public.settle_sale(uuid) to authenticated;
-
 
 -- ============================================================
 --  SON KONTROL — hepsi "var" görünmeli
