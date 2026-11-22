@@ -424,8 +424,8 @@ export default function CreateListingPage() {
                 ))}
               </div>
               <p className="mt-2 text-[0.65rem] leading-relaxed text-muted-2">
-                VIP ayda 3, Premium ayda 1 ücretsiz öne çıkarma hakkına sahip. Hak yoksa
-                talebin yetkili onayına düşer.
+                Öne çıkarma talebin yetkili onayına gönderilir. Onaylanınca ilan seçtiğin süre
+                boyunca mavi çerçeveyle öne çıkarılır.
               </p>
             </div>
           )}

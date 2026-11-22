@@ -909,6 +909,47 @@ update public.profiles p
 -- ---------- 5f) MESAJ YANITI (ALINTI) ----------
 alter table public.messages add column if not exists reply_to jsonb;
 
+-- ---------- 5g) KULLANICI ENGELLEME ----------
+create table if not exists public.user_blocks (
+  blocker_id uuid not null references public.profiles (id) on delete cascade,
+  blocked_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker_id, blocked_id)
+);
+alter table public.user_blocks enable row level security;
+
+drop policy if exists "Engel kendi" on public.user_blocks;
+create policy "Engel kendi" on public.user_blocks for select to authenticated
+  using (blocker_id = auth.uid() or blocked_id = auth.uid());
+drop policy if exists "Engel ekle kendi" on public.user_blocks;
+create policy "Engel ekle kendi" on public.user_blocks for insert to authenticated
+  with check (blocker_id = auth.uid() and blocked_id <> auth.uid());
+drop policy if exists "Engel sil kendi" on public.user_blocks;
+create policy "Engel sil kendi" on public.user_blocks for delete to authenticated
+  using (blocker_id = auth.uid());
+
+create or replace function public.is_blocked_between(p_a uuid, p_b uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from public.user_blocks
+    where (blocker_id = p_a and blocked_id = p_b)
+       or (blocker_id = p_b and blocked_id = p_a)
+  );
+$$;
+grant execute on function public.is_blocked_between(uuid, uuid) to authenticated;
+
+drop policy if exists "Mesaj gönderme" on public.messages;
+create policy "Mesaj gönderme" on public.messages for insert to authenticated
+  with check (
+    sender_id = auth.uid()
+    and exists (
+      select 1 from public.conversations c
+      where c.id = conversation_id
+        and (c.user_a = auth.uid() or c.user_b = auth.uid())
+        and not public.is_blocked_between(c.user_a, c.user_b)
+    )
+  );
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 
@@ -923,7 +964,7 @@ where schemaname = 'public'
   and tablename in ('profiles','listings','user_roles','user_tags','user_frames','notifications',
                     'conversations','conversation_state','messages','sales','reviews',
                     'support_tickets','seller_applications','featured_requests','reports',
-                    'announcements')
+                    'announcements','user_blocks')
 union all
 select 'fonksiyon: ' || proname, 'var'
 from pg_proc
@@ -932,7 +973,7 @@ where pronamespace = 'public'::regnamespace
                   'buyer_confirm','approve_sale','resolve_sales','admin_set_tag','admin_set_role',
                   'admin_set_frame','admin_set_banned','admin_delete_account','admin_feature_listing',
                   'admin_set_listing_status','admin_remove_role','expire_listings','renew_listing',
-                  'admin_notify')
+                  'admin_notify','is_blocked_between')
 union all
 select 'depo: ' || id, 'var' from storage.buckets where id in ('avatars','listing-images')
 order by 1;

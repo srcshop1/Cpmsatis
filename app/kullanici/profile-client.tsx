@@ -5,12 +5,27 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth/auth-provider";
-import { ChevronLeftIcon, MailIcon, StarIcon, UserIcon } from "@/components/icons";
+import {
+  ChevronLeftIcon,
+  FlagIcon,
+  MailIcon,
+  MoreIcon,
+  ShieldIcon,
+  StarIcon,
+  UserIcon,
+  XIcon,
+} from "@/components/icons";
 import { ListingCard } from "@/components/listing-card";
 import { FramedAvatar, StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Listing } from "@/lib/listings";
 import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
+import {
+  REPORT_REASONS,
+  createReport,
+  isUserBlocked,
+  setUserBlock,
+} from "@/lib/social";
 
 type PublicProfile = {
   id: string;
@@ -43,6 +58,14 @@ export function UserProfileClient() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [averages, setAverages] = useState<ReviewAverages | null>(null);
   const [loading, setLoading] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState(REPORT_REASONS[0]);
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportDone, setReportDone] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!supabase || !userId) {
@@ -113,13 +136,47 @@ export function UserProfileClient() {
       setReviews(reviewRows);
       setAverages(averageReviews(reviewRows));
       setLoading(false);
+
+      if (user?.id && user.id !== row.id) {
+        setBlocked(await isUserBlocked(supabase, user.id, row.id));
+      }
     };
 
     void load();
     return () => {
       cancelled = true;
     };
-  }, [supabase, userId]);
+  }, [supabase, userId, user?.id]);
+
+  async function toggleBlock() {
+    if (!supabase || !user || !profile || blockBusy) return;
+    setBlockBusy(true);
+    setMenuOpen(false);
+    const result = await setUserBlock(supabase, user.id, profile.id, !blocked);
+    setBlockBusy(false);
+    if (result.error) {
+      setNotice("İşlem tamamlanamadı. Lütfen tekrar dene.");
+      return;
+    }
+    setBlocked(!blocked);
+    setNotice(!blocked ? "Kullanıcı engellendi. Artık mesaj gönderemez." : "Engel kaldırıldı.");
+  }
+
+  async function submitReport() {
+    if (!supabase || !user || !profile) return;
+    const result = await createReport(supabase, {
+      reporterId: user.id,
+      reportedId: profile.id,
+      conversationId: null,
+      reason: reportReason,
+      details: reportDetails,
+    });
+    if (result.error) {
+      setNotice("Bildiri gönderilemedi. Lütfen tekrar dene.");
+      return;
+    }
+    setReportDone(true);
+  }
 
   if (loading) {
     return (
@@ -158,6 +215,18 @@ export function UserProfileClient() {
         <ChevronLeftIcon width={14} height={14} /> Geri
       </Link>
 
+      {notice && (
+        <div className="mt-2 rounded-xl border border-line bg-white/4 px-3.5 py-2.5 text-xs text-muted">
+          {notice}
+        </div>
+      )}
+
+      {blocked && (
+        <div className="mt-2 rounded-xl border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-xs text-[#ffb3bb]">
+          Bu kullanıcıyı engelledin. Karşılıklı mesaj gönderilemez.
+        </div>
+      )}
+
       <div className="mt-2 card p-5">
         <div className="flex items-start gap-3">
           <FramedAvatar
@@ -179,10 +248,52 @@ export function UserProfileClient() {
               {profile.staff_tag && <StaffBadge tag={profile.staff_tag} small />}
             </div>
           </div>
-          {user?.id === profile.id && (
+          {user?.id === profile.id ? (
             <Link href="/profil" className="btn btn-ghost h-8 shrink-0 px-3 text-[0.7rem]">
               Düzenle
             </Link>
+          ) : (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((prev) => !prev)}
+                aria-label="Profil menüsü"
+                className="grid h-9 w-9 place-items-center rounded-lg border border-line bg-white/4 text-muted transition hover:text-text"
+              >
+                <MoreIcon width={18} height={18} />
+              </button>
+
+              {menuOpen && (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-30 cursor-default"
+                    onClick={() => setMenuOpen(false)}
+                    aria-label="Kapat"
+                  />
+                  <div className="animate-pop absolute right-0 top-11 z-40 w-48 overflow-hidden rounded-xl border border-line bg-surface shadow-2xl">
+                    <button
+                      type="button"
+                      onClick={() => void toggleBlock()}
+                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[0.78rem] text-text hover:bg-white/5"
+                    >
+                      <ShieldIcon width={15} height={15} /> {blocked ? "Engeli kaldır" : "Engelle"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setReportOpen(true);
+                        setReportDone(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[0.78rem] text-[#ffb3bb] hover:bg-danger/10"
+                    >
+                      <FlagIcon width={15} height={15} /> Profili bildir
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
 
@@ -277,6 +388,86 @@ export function UserProfileClient() {
           ))}
         </div>
       </section>
+
+      {reportOpen && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/65 backdrop-blur-sm"
+            onClick={() => setReportOpen(false)}
+            aria-label="Kapat"
+          />
+          <div className="animate-pop relative max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-line bg-surface p-5 sm:rounded-2xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold">Profili bildir</h2>
+              <button
+                type="button"
+                onClick={() => setReportOpen(false)}
+                className="grid h-8 w-8 place-items-center rounded-lg text-muted-2 hover:bg-white/5 hover:text-text"
+                aria-label="Kapat"
+              >
+                <XIcon width={16} height={16} />
+              </button>
+            </div>
+
+            {reportDone ? (
+              <div className="py-8 text-center">
+                <p className="text-sm font-semibold">Bildirin alındı</p>
+                <p className="mt-1 text-xs text-muted-2">Yetkili ekibimiz profili inceleyecek.</p>
+                <button
+                  type="button"
+                  onClick={() => setReportOpen(false)}
+                  className="btn btn-ghost mt-4 h-9 px-4 text-xs"
+                >
+                  Kapat
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className="mt-1 text-xs text-muted-2">
+                  @{profile.username} hakkında bildiri gönder. Yetkililer inceleyecek.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {REPORT_REASONS.map((reason) => (
+                    <button
+                      key={reason}
+                      type="button"
+                      onClick={() => setReportReason(reason)}
+                      className={`chip ${reportReason === reason ? "chip-active" : ""}`}
+                    >
+                      {reason}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={reportDetails}
+                  onChange={(event) => setReportDetails(event.target.value)}
+                  rows={4}
+                  maxLength={500}
+                  placeholder="Detay (isteğe bağlı)"
+                  className="field mt-3 resize-none text-[0.8rem] leading-relaxed"
+                />
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setReportOpen(false)}
+                    className="btn btn-ghost h-10 flex-1 text-sm"
+                  >
+                    Vazgeç
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void submitReport()}
+                    className="btn btn-primary h-10 flex-1 text-sm"
+                  >
+                    Bildir
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
