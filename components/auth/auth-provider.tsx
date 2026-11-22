@@ -123,34 +123,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let unsubscribe = () => {};
 
     const init = async () => {
-      if (supabase) {
-        const { data } = await supabase.auth.getSession();
-        if (cancelled) return;
-
-        if (data.session?.user) {
-          setUser(await buildUser(data.session.user));
-        } else {
-          setUser(null);
-        }
-
-        const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      try {
+        if (supabase) {
+          const { data } = await supabase.auth.getSession();
           if (cancelled) return;
-          if (session?.user) {
-            void buildUser(session.user).then((nextUser) => {
-              if (!cancelled) setUser(nextUser);
-            });
+
+          if (data.session?.user) {
+            try {
+              setUser(await buildUser(data.session.user));
+            } catch {
+              setUser(null);
+            }
           } else {
             setUser(null);
           }
-        });
-        unsubscribe = () => listener.subscription.unsubscribe();
-        if (!cancelled) setLoading(false);
-      } else {
-        const restored = demoRestoreSession();
-        if (!cancelled) {
-          setUser(restored);
-          setLoading(false);
+
+          const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (cancelled) return;
+            if (session?.user) {
+              void buildUser(session.user)
+                .then((nextUser) => {
+                  if (!cancelled) setUser(nextUser);
+                })
+                .catch(() => {
+                  if (!cancelled) setUser(null);
+                });
+            } else {
+              setUser(null);
+            }
+          });
+          unsubscribe = () => listener.subscription.unsubscribe();
+        } else {
+          const restored = demoRestoreSession();
+          if (!cancelled) setUser(restored);
         }
+      } catch {
+        if (!cancelled) setUser(null);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
