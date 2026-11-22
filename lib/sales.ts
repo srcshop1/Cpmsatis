@@ -33,6 +33,8 @@ export type Review = {
   delivery: number;
   overall: number;
   comment: string | null;
+  reply?: string | null;
+  replied_at?: string | null;
   created_at: string;
   reviewer?: { username: string; avatar_url: string | null } | null;
 };
@@ -159,16 +161,27 @@ export async function loadReviews(
   filter: { sellerId?: string; listingId?: string },
   limit = 30,
 ): Promise<Review[]> {
-  let request = supabase
-    .from("reviews")
-    .select(REVIEW_COLUMNS)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const build = (columns: string) => {
+    let request = supabase
+      .from("reviews")
+      .select(columns)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (filter.sellerId) request = request.eq("seller_id", filter.sellerId);
+    if (filter.listingId) request = request.eq("listing_id", filter.listingId);
+    return request;
+  };
 
-  if (filter.sellerId) request = request.eq("seller_id", filter.sellerId);
-  if (filter.listingId) request = request.eq("listing_id", filter.listingId);
+  // Cevap kolonları yoksa temel alanlarla devam et
+  let data: unknown[] | null = null;
+  for (const columns of [`${REVIEW_COLUMNS}, reply, replied_at`, REVIEW_COLUMNS]) {
+    const result = await build(columns);
+    if (!result.error) {
+      data = result.data as unknown[] | null;
+      break;
+    }
+  }
 
-  const { data } = await request;
   const reviews = (data ?? []) as Review[];
   if (reviews.length === 0) return reviews;
 
@@ -187,6 +200,29 @@ export async function loadReviews(
     ...review,
     reviewer: map.get(review.buyer_id) ?? null,
   }));
+}
+
+/** Satıcı, aldığı değerlendirmeye cevap yazar */
+export async function replyToReview(
+  supabase: SupabaseClient,
+  reviewId: string,
+  reply: string,
+): Promise<{ error: string | null }> {
+  const text = reply.trim();
+  if (!text) return { error: "Cevap boş olamaz." };
+  if (hasProfanity(text)) return { error: PROFANITY_MESSAGE };
+
+  const { error } = await supabase.rpc("reply_review", {
+    p_review: reviewId,
+    p_reply: text,
+  });
+  if (!error) return { error: null };
+
+  const fallback = await supabase
+    .from("reviews")
+    .update({ reply: text.slice(0, 500), replied_at: new Date().toISOString() })
+    .eq("id", reviewId);
+  return { error: fallback.error?.message ?? null };
 }
 
 export async function createReview(
