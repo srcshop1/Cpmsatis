@@ -186,14 +186,29 @@ export function ChatClient() {
   // Yeni mesajları periyodik çek
   useEffect(() => {
     if (!supabase || !conversation) return;
-    const timer = setInterval(async () => {
+    const refresh = async (markRead: boolean) => {
       if (!user) return;
-      await markMessagesRead(supabase, conversation.id, user.id);
+      if (markRead && typeof document !== "undefined" && document.visibilityState === "visible") {
+        await markMessagesRead(supabase, conversation.id, user.id);
+      }
       const rows = await loadMessages(supabase, conversation.id, clearedAt);
       setMessages(rows);
       setBlocked(await isConversationBlocked(supabase, conversation.id));
-    }, 4000);
-    return () => clearInterval(timer);
+    };
+
+    const timer = setInterval(() => void refresh(true), 3000);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh(true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   }, [supabase, conversation, clearedAt]);
 
   useEffect(() => {

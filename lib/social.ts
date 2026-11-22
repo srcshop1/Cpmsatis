@@ -136,27 +136,33 @@ export async function loadMessages(
   conversationId: string,
   clearedAt?: string | null,
 ): Promise<Message[]> {
-  let request = supabase
-    .from("messages")
-    .select("id, conversation_id, sender_id, body, listing_ref, reply_to, read_at, created_at")
-    .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
-    .limit(200);
-
-  if (clearedAt) request = request.gt("created_at", clearedAt);
-
-  let { data, error } = await request;
-
-  // Yeni kolonlar yoksa temel alanlarla devam et
-  if (error) {
-    let retry = supabase
+  const base = "id, conversation_id, sender_id, body, listing_ref, created_at";
+  const run = async (columns: string) => {
+    let request = supabase
       .from("messages")
-      .select("id, conversation_id, sender_id, body, listing_ref, created_at")
+      .select(columns)
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true })
       .limit(200);
-    if (clearedAt) retry = retry.gt("created_at", clearedAt);
-    data = (await retry).data as typeof data;
+    if (clearedAt) request = request.gt("created_at", clearedAt);
+    return request;
+  };
+
+  // Yeni kolonlar (reply_to / read_at) yoksa kademeli olarak temel alanlara in
+  const attempts = [
+    "id, conversation_id, sender_id, body, listing_ref, reply_to, read_at, created_at",
+    "id, conversation_id, sender_id, body, listing_ref, read_at, created_at",
+    "id, conversation_id, sender_id, body, listing_ref, reply_to, created_at",
+    base,
+  ];
+
+  let data: unknown[] | null = null;
+  for (const columns of attempts) {
+    const result = await run(columns);
+    if (!result.error) {
+      data = result.data as unknown[] | null;
+      break;
+    }
   }
 
   return ((data ?? []) as Message[]).map((message) => ({

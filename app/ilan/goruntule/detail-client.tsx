@@ -655,12 +655,30 @@ export function ListingDetailClient() {
                       <StarIcon width={11} height={11} /> {review.overall}/5
                     </span>
                   </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1 text-[0.55rem] leading-none">
+                    {[
+                      ["Mem", "Memnuniyet", review.satisfaction],
+                      ["Güv", "Güvenilirlik", review.trust],
+                      ["İle", "İletişim", review.communication],
+                      ["Tes", "Teslimat", review.delivery],
+                      ["Gen", "Genel", review.overall],
+                    ].map(([short, long, value]) => (
+                      <span
+                        key={short as string}
+                        title={long as string}
+                        className="inline-flex items-center gap-1 rounded border border-line-soft bg-white/4 px-1 py-[2px] text-muted-2"
+                      >
+                        {short}
+                        <span className="font-bold text-accent">{value as number}</span>
+                      </span>
+                    ))}
+                  </div>
                   {review.comment && (
-                    <p className="mt-2 text-[0.78rem] leading-relaxed text-muted">
+                    <p className="mt-1.5 text-[0.78rem] leading-relaxed text-muted">
                       {review.comment}
                     </p>
                   )}
-                  <p className="mt-1.5 text-[0.6rem] text-muted-2">
+                  <p className="mt-1 text-[0.6rem] text-muted-2">
                     {new Date(review.created_at).toLocaleDateString("tr-TR")}
                   </p>
                 </div>
