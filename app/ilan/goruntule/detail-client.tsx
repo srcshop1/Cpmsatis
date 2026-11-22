@@ -84,6 +84,11 @@ export function ListingDetailClient() {
   const [sellDone, setSellDone] = useState(false);
   const [sellerTags, setSellerTags] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [featuredOpen, setFeaturedOpen] = useState(false);
+  const [featuredDays, setFeaturedDays] = useState(3);
+  const [featuredBusy, setFeaturedBusy] = useState(false);
+  const [featuredPending, setFeaturedPending] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const isOwner = Boolean(user && listing && user.id === listing.seller_id);
 
@@ -230,6 +235,43 @@ export function ListingDetailClient() {
     router.push(`/mesajlar/sohbet?id=${conversationId}`);
   }
 
+  useEffect(() => {
+    if (!supabase || !listing || !isOwner) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("featured_requests")
+        .select("id")
+        .eq("listing_id", listing.id)
+        .eq("status", "pending")
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setFeaturedPending(Boolean(data));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, listing, isOwner]);
+
+  async function requestFeatured() {
+    if (!supabase || !user || !listing) return;
+    setFeaturedBusy(true);
+    setNotice(null);
+    const { error: requestError } = await supabase.from("featured_requests").insert({
+      listing_id: listing.id,
+      seller_id: user.id,
+      days: featuredDays,
+    });
+    setFeaturedBusy(false);
+    setFeaturedOpen(false);
+    if (requestError) {
+      setNotice("Talep gönderilemedi. Lütfen tekrar dene.");
+      return;
+    }
+    setFeaturedPending(true);
+    setNotice("Öne çıkarma talebin yetkiliye gönderildi. Onaylanınca ilan öne çıkar.");
+  }
+
   async function renew() {
     if (!supabase || !listing) return;
     setSending(true);
@@ -312,7 +354,13 @@ export function ListingDetailClient() {
 
       {state === "ready" && listing && (
         <div className="mt-4 space-y-4">
-          <div className="relative overflow-hidden rounded-2xl border border-line bg-black/40">
+          <div
+            className={`relative overflow-hidden rounded-2xl border bg-black/40 ${
+              listing.featured_until && new Date(listing.featured_until) > new Date()
+                ? "border-[#3b82f6]/70 shadow-[0_0_0_1px_rgba(59,130,246,0.35)]"
+                : "border-line"
+            }`}
+          >
             <div className="relative">
               {listing.images && listing.images.length > 0 ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -328,7 +376,7 @@ export function ListingDetailClient() {
               )}
 
               {listing.featured_until && new Date(listing.featured_until) > new Date() && (
-                <span className="absolute left-3 top-3 badge border border-accent/40 bg-accent/90 text-[0.65rem] font-bold text-ink">
+                <span className="absolute left-3 top-3 badge border border-[#93c5fd]/50 bg-[#2563eb] text-[0.65rem] font-bold text-white">
                   <StarIcon width={11} height={11} /> ÖNE ÇIKAN
                 </span>
               )}
@@ -474,6 +522,23 @@ export function ListingDetailClient() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    setNotice(null);
+                    setFeaturedOpen(true);
+                  }}
+                  disabled={sending || featuredPending}
+                  className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-[#3b82f6]/40 bg-[#3b82f6]/10 text-sm font-semibold text-[#93c5fd] transition hover:bg-[#3b82f6]/20 disabled:opacity-60"
+                >
+                  <StarIcon width={15} height={15} />
+                  {featuredPending ? "Öne çıkarma talebi onay bekliyor" : "Öne Çıkarma Talebi Gönder"}
+                </button>
+                {notice && (
+                  <p className="rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.7rem] leading-relaxed text-muted">
+                    {notice}
+                  </p>
+                )}
+                <button
+                  type="button"
                   onClick={renew}
                   disabled={sending}
                   className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-line bg-white/4 text-sm font-semibold text-muted transition hover:text-text disabled:opacity-60"
@@ -600,6 +665,53 @@ export function ListingDetailClient() {
                   </p>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {featuredOpen && (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/65 backdrop-blur-sm"
+            onClick={() => setFeaturedOpen(false)}
+            aria-label="Kapat"
+          />
+          <div className="animate-pop relative w-full max-w-md rounded-t-2xl border border-line bg-surface p-5 sm:rounded-2xl">
+            <h2 className="text-base font-bold">Öne çıkarma talebi</h2>
+            <p className="mt-1 text-xs leading-relaxed text-muted-2">
+              Talep yetkiliye gider. Onaylanınca ilan seçtiğin süre boyunca öne çıkarılır ve mavi
+              çerçeveyle gösterilir.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {[1, 3, 7].map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => setFeaturedDays(day)}
+                  className={`chip ${featuredDays === day ? "chip-active" : ""}`}
+                >
+                  {day} gün
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setFeaturedOpen(false)}
+                className="btn btn-ghost h-10 flex-1 text-sm"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                onClick={() => void requestFeatured()}
+                disabled={featuredBusy}
+                className="btn btn-primary h-10 flex-1 text-sm"
+              >
+                {featuredBusy ? "…" : "Talep Gönder"}
+              </button>
             </div>
           </div>
         </div>

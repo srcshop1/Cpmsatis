@@ -28,6 +28,7 @@ import {
   REPORT_REASONS,
   createReport,
   isConversationBlocked,
+  isBlockedEitherWay,
   loadMessages,
   loadProfileMini,
   markMessagesRead,
@@ -64,7 +65,7 @@ function ReadTicks({ read }: { read: boolean }) {
       viewBox="0 0 16 11"
       fill="none"
       aria-label={read ? "Okundu" : "İletildi"}
-      className={read ? "text-accent" : "text-white/45"}
+      className={read ? "text-[#0b1a3a]" : "text-[#cfd8e6]"}
     >
       <path
         d="M1 6.1L4.1 9.2L11.2 1.3"
@@ -160,8 +161,10 @@ export function ChatClient() {
       const cleared = (state as { cleared_at: string | null } | null)?.cleared_at ?? null;
       if (!cancelled) {
         setClearedAt(cleared);
+        const blockedBetween = await isBlockedEitherWay(supabase, user.id, otherId);
         setBlocked(
-          Boolean((state as { blocked: boolean } | null)?.blocked) ||
+          blockedBetween ||
+            Boolean((state as { blocked: boolean } | null)?.blocked) ||
             (await isConversationBlocked(supabase, row.id)),
         );
       }
@@ -551,7 +554,7 @@ export function ChatClient() {
                   ) : ref?.title ? (
                     <a
                       href={ref.id ? `/ilan/goruntule?id=${ref.id}` : undefined}
-                      className={`mb-0.5 flex items-center gap-2 rounded-lg p-1.5 ${
+                      className={`mb-0.5 flex items-center gap-2.5 rounded-xl p-2 ${
                         mine ? "bg-black/20" : "bg-white/5"
                       }`}
                     >
@@ -560,20 +563,20 @@ export function ChatClient() {
                         <img
                           src={ref.image}
                           alt=""
-                          className="h-11 w-11 shrink-0 rounded-md object-cover"
+                          className="h-16 w-16 shrink-0 rounded-lg object-cover"
                           loading="lazy"
                         />
                       ) : (
-                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-black/25">
+                        <span className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-black/25 text-lg">
                           🖼️
                         </span>
                       )}
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[0.72rem] font-semibold">
+                        <span className="line-clamp-2 text-[0.78rem] font-bold leading-snug">
                           {ref.title}
                         </span>
                         {typeof ref.price === "number" && (
-                          <span className="block text-[0.68rem] font-bold">
+                          <span className="mt-1 block text-[0.72rem] font-bold">
                             {formatPrice(ref.price)}
                           </span>
                         )}
@@ -626,11 +629,7 @@ export function ChatClient() {
               <XIcon width={14} height={14} />
             </button>
           </div>
-        ) : (
-          <p className="mt-2 text-[0.62rem] text-muted-2">
-            Yanıtlamak için mesajı sola kaydır.
-          </p>
-        )}
+        ) : null}
 
         {plusOpen && (
           <div className="mt-2 flex gap-2">

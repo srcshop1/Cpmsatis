@@ -17,7 +17,9 @@ export function ListingCard({ listing }: { listing: Listing }) {
   return (
     <Link
       href={`/ilan/goruntule?id=${listing.id}`}
-      className="card card-hover group flex flex-col overflow-hidden"
+      className={`card card-hover group flex flex-col overflow-hidden ${
+        isFeatured(listing) ? "card-featured" : ""
+      }`}
     >
       <div className="relative aspect-square w-full overflow-hidden bg-black/40">
         {cover ? (
@@ -49,7 +51,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
         </span>
 
         {isFeatured(listing) && (
-          <span className="absolute right-2 top-2 badge border border-accent/40 bg-accent/90 text-[0.62rem] font-bold text-ink">
+          <span className="absolute right-2 top-2 badge border border-[#93c5fd]/50 bg-[#2563eb] text-[0.62rem] font-bold text-white">
             <StarIcon width={10} height={10} /> ÖNE ÇIKAN
           </span>
         )}

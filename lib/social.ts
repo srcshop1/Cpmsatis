@@ -292,6 +292,57 @@ export async function isConversationBlocked(
   return ((data ?? []) as { blocked: boolean }[]).some((row) => row.blocked);
 }
 
+/** Kullanıcı engelleme (profil üzerinden) */
+export async function isUserBlocked(
+  supabase: SupabaseClient,
+  blockerId: string,
+  blockedId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("user_blocks")
+    .select("blocked_id")
+    .eq("blocker_id", blockerId)
+    .eq("blocked_id", blockedId)
+    .maybeSingle();
+  if (error) return false;
+  return Boolean(data);
+}
+
+export async function isBlockedEitherWay(
+  supabase: SupabaseClient,
+  a: string,
+  b: string,
+): Promise<boolean> {
+  const [first, second] = await Promise.all([
+    isUserBlocked(supabase, a, b),
+    isUserBlocked(supabase, b, a),
+  ]);
+  return first || second;
+}
+
+export async function setUserBlock(
+  supabase: SupabaseClient,
+  blockerId: string,
+  blockedId: string,
+  block: boolean,
+): Promise<{ error: string | null }> {
+  if (block) {
+    const { error } = await supabase
+      .from("user_blocks")
+      .upsert(
+        { blocker_id: blockerId, blocked_id: blockedId },
+        { onConflict: "blocker_id,blocked_id", ignoreDuplicates: true },
+      );
+    return { error: error?.message ?? null };
+  }
+  const { error } = await supabase
+    .from("user_blocks")
+    .delete()
+    .eq("blocker_id", blockerId)
+    .eq("blocked_id", blockedId);
+  return { error: error?.message ?? null };
+}
+
 export async function createReport(
   supabase: SupabaseClient,
   input: {
