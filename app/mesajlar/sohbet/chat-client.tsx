@@ -99,6 +99,7 @@ export function ChatClient() {
   const [clearedAt, setClearedAt] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -124,57 +125,64 @@ export function ChatClient() {
     let cancelled = false;
 
     const bootstrap = async () => {
-      const { data } = await supabase
-        .from("conversations")
-        .select("id, listing_id, user_a, user_b")
-        .eq("id", conversationId)
-        .maybeSingle();
-
-      if (cancelled) return;
-      if (!data) {
-        setError("Sohbet bulunamadı ya da erişimin yok.");
-        setLoading(false);
-        return;
-      }
-      const row = data as ConversationRow;
-      setConversation(row);
-
-      const otherId = row.user_a === user.id ? row.user_b : row.user_a;
-      const profiles = await loadProfileMini(supabase, [otherId]);
-      if (!cancelled) setOther(profiles.get(otherId) ?? null);
-
-      if (row.listing_id) {
-        const { data: listingRow } = await supabase
-          .from("listings")
-          .select("id, title, price, images")
-          .eq("id", row.listing_id)
+      try {
+        const { data } = await supabase
+          .from("conversations")
+          .select("id, listing_id, user_a, user_b")
+          .eq("id", conversationId)
           .maybeSingle();
-        if (!cancelled) setListing(listingRow as typeof listing);
-      }
 
-      const { data: state } = await supabase
-        .from("conversation_state")
-        .select("cleared_at, blocked")
-        .eq("conversation_id", row.id)
-        .eq("user_id", user.id)
-        .maybeSingle();
+        if (cancelled) return;
+        if (!data) {
+          setError("Sohbet bulunamadı ya da erişimin yok.");
+          setLoading(false);
+          return;
+        }
+        const row = data as ConversationRow;
+        setConversation(row);
 
-      const cleared = (state as { cleared_at: string | null } | null)?.cleared_at ?? null;
-      if (!cancelled) {
-        setClearedAt(cleared);
-        const blockedBetween = await isBlockedEitherWay(supabase, user.id, otherId);
-        setBlocked(
-          blockedBetween ||
-            Boolean((state as { blocked: boolean } | null)?.blocked) ||
-            (await isConversationBlocked(supabase, row.id)),
-        );
-      }
+        const otherId = row.user_a === user.id ? row.user_b : row.user_a;
+        const profiles = await loadProfileMini(supabase, [otherId]);
+        if (!cancelled) setOther(profiles.get(otherId) ?? null);
 
-      await markMessagesRead(supabase, row.id, user.id);
-      const rows = await loadMessages(supabase, row.id, cleared);
-      if (!cancelled) {
-        setMessages(rows);
-        setLoading(false);
+        if (row.listing_id) {
+          const { data: listingRow } = await supabase
+            .from("listings")
+            .select("id, title, price, images")
+            .eq("id", row.listing_id)
+            .maybeSingle();
+          if (!cancelled) setListing(listingRow as typeof listing);
+        }
+
+        const { data: state } = await supabase
+          .from("conversation_state")
+          .select("cleared_at, blocked")
+          .eq("conversation_id", row.id)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        const cleared = (state as { cleared_at: string | null } | null)?.cleared_at ?? null;
+        if (!cancelled) {
+          setClearedAt(cleared);
+          const blockedBetween = await isBlockedEitherWay(supabase, user.id, otherId);
+          setBlocked(
+            blockedBetween ||
+              Boolean((state as { blocked: boolean } | null)?.blocked) ||
+              (await isConversationBlocked(supabase, row.id)),
+          );
+        }
+
+        await markMessagesRead(supabase, row.id, user.id);
+        const rows = await loadMessages(supabase, row.id, cleared);
+        if (!cancelled) {
+          setMessages(rows);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Sohbet yüklenemedi. Sayfayı yenileyip tekrar dene.");
+          setLoading(false);
+        }
       }
     };
 
@@ -189,12 +197,16 @@ export function ChatClient() {
     if (!supabase || !conversation) return;
     const refresh = async (markRead: boolean) => {
       if (!user) return;
-      if (markRead && typeof document !== "undefined" && document.visibilityState === "visible") {
-        await markMessagesRead(supabase, conversation.id, user.id);
+      try {
+        if (markRead && typeof document !== "undefined" && document.visibilityState === "visible") {
+          await markMessagesRead(supabase, conversation.id, user.id);
+        }
+        const rows = await loadMessages(supabase, conversation.id, clearedAt);
+        setMessages((prev) => (rows.length === 0 && prev.length > 0 ? prev : rows));
+        setBlocked(await isConversationBlocked(supabase, conversation.id));
+      } catch {
+        // Sessizce bekle; bir sonraki turda tekrar dener
       }
-      const rows = await loadMessages(supabase, conversation.id, clearedAt);
-      setMessages(rows);
-      setBlocked(await isConversationBlocked(supabase, conversation.id));
     };
 
     const timer = setInterval(() => void refresh(true), 3000);
@@ -219,15 +231,32 @@ export function ChatClient() {
   }, [messages.length]);
 
   async function handleSend() {
-    if (!supabase || !user || !conversation || !draft.trim()) return;
+    if (!supabase || !user || sending) return;
+    const body = draft.trim();
+    if (!body) return;
+    // Sohbet bilgisi bir şekilde boş kaldıysa göndermeden önce tekrar çek
+    let conv = conversation;
+    if (!conv) {
+      const { data } = await supabase
+        .from("conversations")
+        .select("id, listing_id, user_a, user_b")
+        .eq("id", conversationId)
+        .maybeSingle();
+      conv = (data as ConversationRow | null) ?? null;
+      if (conv) setConversation(conv);
+    }
+    if (!conv) {
+      setError("Sohbet bulunamadı. Mesajlar sayfasından sohbeti yeniden aç.");
+      return;
+    }
     if (blocked) {
       setError("Bu sohbette engelleme var, mesaj gönderilemez.");
       return;
     }
-    const body = draft;
+    setSending(true);
     setDraft("");
     const result = await sendMessage(supabase, {
-      conversationId: conversation.id,
+      conversationId: conv.id,
       senderId: user.id,
       body,
       replyTo: replyTo
@@ -245,6 +274,7 @@ export function ChatClient() {
           }
         : null,
     });
+    setSending(false);
     if (result.error) {
       setDraft(body);
       setError(result.error);
@@ -252,7 +282,34 @@ export function ChatClient() {
     }
     setError(null);
     setReplyTo(null);
-    setMessages(await loadMessages(supabase, conversation.id, clearedAt));
+
+    // Mesaj hemen görünsün; sunucudan gelen liste birazdan onun yerini alır.
+    const optimistic: Message = {
+      id: `local-${Date.now()}`,
+      conversation_id: conv.id,
+      sender_id: user.id,
+      body,
+      listing_ref: null,
+      reply_to: replyTo
+        ? {
+            id: replyTo.id,
+            username:
+              replyTo.sender_id === user.id
+                ? user.username ?? "sen"
+                : other?.username ?? "kullanıcı",
+            body:
+              replyTo.listing_ref?.kind === "image"
+                ? "Görsel"
+                : replyTo.listing_ref?.title ?? replyTo.body,
+            kind: replyTo.listing_ref?.kind === "image" ? "image" : replyTo.listing_ref?.kind ?? "text",
+          }
+        : null,
+      read_at: null,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    const rows = await loadMessages(supabase, conv.id, clearedAt);
+    if (rows.length > 0) setMessages(rows);
   }
 
   function jumpToMessage(id?: string) {
@@ -709,10 +766,10 @@ export function ChatClient() {
           <button
             type="button"
             onClick={handleSend}
-            disabled={blocked || !draft.trim()}
+            disabled={blocked || sending || !draft.trim()}
             className="btn btn-primary h-11 shrink-0 px-4 text-sm disabled:opacity-50"
           >
-            Gönder
+            {sending ? "…" : "Gönder"}
           </button>
         </div>
 

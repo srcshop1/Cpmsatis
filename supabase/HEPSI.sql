@@ -1119,6 +1119,35 @@ begin
 end; $$;
 grant execute on function public.admin_sync_sales_count(uuid) to authenticated;
 
+-- ---------- 5l) MESAJ GÖNDERME (SUNUCU TARAFI YEDEK) ----------
+create or replace function public.send_message(
+  p_conversation uuid,
+  p_body text,
+  p_listing_ref jsonb default null,
+  p_reply_to jsonb default null
+) returns uuid language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_me uuid := auth.uid(); v_body text;
+begin
+  if v_me is null then raise exception 'Oturum gerekli'; end if;
+
+  if not exists (
+    select 1 from public.conversations c
+     where c.id = p_conversation and (c.user_a = v_me or c.user_b = v_me)
+  ) then
+    raise exception 'Bu sohbete mesaj gönderemiyorsun';
+  end if;
+
+  v_body := btrim(coalesce(p_body, ''));
+  if v_body = '' then raise exception 'Mesaj boş olamaz'; end if;
+
+  insert into public.messages (conversation_id, sender_id, body, listing_ref, reply_to)
+  values (p_conversation, v_me, left(v_body, 4000), p_listing_ref, p_reply_to)
+  returning id into v_id;
+
+  return v_id;
+end; $$;
+grant execute on function public.send_message(uuid, text, jsonb, jsonb) to authenticated;
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 
@@ -1143,7 +1172,7 @@ where pronamespace = 'public'::regnamespace
                   'admin_set_frame','admin_set_banned','admin_delete_account','admin_feature_listing',
                   'admin_set_listing_status','admin_remove_role','expire_listings','renew_listing',
                   'admin_notify','is_blocked_between','reply_review','admin_delete_review',
-                  'admin_clear_reviews','admin_set_sales_count','admin_sync_sales_count')
+                  'admin_clear_reviews','admin_set_sales_count','admin_sync_sales_count','send_message')
 union all
 select 'depo: ' || id, 'var' from storage.buckets where id in ('avatars','listing-images')
 order by 1;
