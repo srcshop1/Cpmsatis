@@ -144,6 +144,8 @@ type SaleRow = {
   seller_id: string;
   buyer_id: string;
   status: string;
+  counted?: boolean | null;
+  flag_reason?: string | null;
   created_at: string;
 };
 
@@ -326,12 +328,22 @@ export default function AdminPage() {
     }
 
     if (tab === "sales") {
-      const { data } = await supabase
+      let { data, error } = await supabase
         .from("sales")
-        .select("id, listing_id, seller_id, buyer_id, status, created_at")
+        .select("id, listing_id, seller_id, buyer_id, status, counted, flag_reason, created_at")
         .order("created_at", { ascending: false })
         .limit(40);
-      const rows = (data ?? []) as SaleRow[];
+
+      if (error) {
+        const retry = await supabase
+          .from("sales")
+          .select("id, listing_id, seller_id, buyer_id, status, created_at")
+          .order("created_at", { ascending: false })
+          .limit(40);
+        data = retry.data as typeof data;
+      }
+
+      const rows = (data ?? []) as unknown as SaleRow[];
       setSalesRows(rows);
       await loadProfiles(rows.flatMap((row) => [row.seller_id, row.buyer_id]));
     }
@@ -361,6 +373,7 @@ export default function AdminPage() {
         { count: newUsers },
         { count: newListings },
         { count: pendingReviews },
+        { count: suspectSales },
       ] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }),
         supabase.from("listings").select("id", { count: "exact", head: true }),
@@ -387,6 +400,11 @@ export default function AdminPage() {
           .from("reviews")
           .select("id", { count: "exact", head: true })
           .neq("status", "approved"),
+        supabase
+          .from("sales")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "approved")
+          .eq("counted", false),
       ]);
       setStats({
         users: userCount ?? 0,
@@ -399,6 +417,7 @@ export default function AdminPage() {
         newUsers: newUsers ?? 0,
         newListings: newListings ?? 0,
         pendingReviews: pendingReviews ?? 0,
+        suspectSales: suspectSales ?? 0,
       });
     }
   }, [supabase, tab, loadProfiles]);
@@ -723,6 +742,30 @@ export default function AdminPage() {
     setNotice(`${selectedListings.length} ilan gizlendi.`);
     setSelectedListings([]);
     await loadTab();
+  }
+
+  async function toggleSaleCounted(sale: SaleRow) {
+    if (!supabase) return;
+    setBusy(sale.id);
+    setNotice(null);
+    const next = !(sale.counted ?? true);
+    const { error } = await supabase.rpc("admin_set_sale_counted", {
+      p_sale: sale.id,
+      p_counted: next,
+    });
+    setBusy(null);
+    if (error) {
+      setNotice("İşlem güncellenemedi.");
+      return;
+    }
+    setSalesRows((prev) =>
+      prev.map((row) =>
+        row.id === sale.id
+          ? { ...row, counted: next, flag_reason: next ? null : row.flag_reason ?? "yetkili kararı" }
+          : row,
+      ),
+    );
+    setNotice(next ? "İşlem başarılı sayıldı." : "İşlem sayılmıyor.");
   }
 
   async function setReportPriority(report: Report, priority: "high" | "normal") {
@@ -1669,6 +1712,22 @@ export default function AdminPage() {
                     {new Date(sale.created_at).toLocaleString("tr-TR")} · {sale.status}
                   </p>
                 </div>
+                {(sale.counted ?? true) === false && (
+                  <span className="badge border border-danger/40 bg-danger/10 text-[0.55rem] font-bold text-danger">
+                    SAYILMIYOR
+                  </span>
+                )}
+                {(sale.counted ?? true) === false && sale.flag_reason && (
+                  <span className="text-[0.6rem] text-[#ffd166]">şüphe: {sale.flag_reason}</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void toggleSaleCounted(sale)}
+                  disabled={busy === sale.id}
+                  className="chip px-2 py-1 text-[0.62rem]"
+                >
+                  {(sale.counted ?? true) ? "Sayma" : "Başarılı say"}
+                </button>
                 <Link
                   href={`/ilan/goruntule?id=${sale.listing_id}`}
                   className="text-[0.68rem] text-accent hover:underline"
@@ -2010,6 +2069,7 @@ export default function AdminPage() {
               { label: "Açık destek", value: stats.openTickets, icon: <ClockIcon width={16} height={16} /> },
               { label: "Açık bildiri", value: stats.openReports, icon: <FlagIcon width={16} height={16} /> },
               { label: "İncelemede değerlendirme", value: stats.pendingReviews, icon: <StarIcon width={16} height={16} /> },
+              { label: "Sayılmayan işlem", value: stats.suspectSales, icon: <ShieldIcon width={16} height={16} /> },
             ].map((item) => (
               <div key={item.label} className="card p-4">
                 <span className="text-accent">{item.icon}</span>

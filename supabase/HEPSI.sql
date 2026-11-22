@@ -1694,6 +1694,152 @@ begin
 end; $$;
 
 
+-- ---------- 5v) SAHTE BAŞARILI İŞLEM KORUMASI ----------
+alter table public.sales add column if not exists counted boolean not null default true;
+alter table public.sales add column if not exists flag_reason text;
+update public.sales set counted = true where counted is null;
+
+-- Başarılı işlem sayısı = onaylı ve sayılan satışlar
+create or replace function public.recalc_sales_count(p_user uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer;
+begin
+  select count(*) into v_count from public.sales
+   where seller_id = p_user and status = 'approved' and counted;
+  update public.profiles set sales_count = v_count where id = p_user;
+  return v_count;
+end; $$;
+grant execute on function public.recalc_sales_count(uuid) to authenticated;
+
+-- Satışı bitir: şüpheliyse "sayılmayan" olarak kapat
+create or replace function public.settle_sale(p_sale uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_sale public.sales;
+  v_age interval;
+  v_pair integer;
+  v_day integer;
+  v_flags text[] := '{}';
+  v_title text;
+begin
+  select * into v_sale from public.sales where id = p_sale;
+  if v_sale is null then raise exception 'Satış bulunamadı'; end if;
+  if v_sale.status = 'approved' then return; end if;
+
+  select now() - created_at into v_age from public.profiles where id = v_sale.buyer_id;
+
+  select count(*) into v_pair from public.sales
+   where seller_id = v_sale.seller_id and buyer_id = v_sale.buyer_id
+     and status = 'approved' and counted
+     and created_at > now() - interval '30 days';
+
+  select count(*) into v_day from public.sales
+   where seller_id = v_sale.seller_id and status = 'approved' and counted
+     and coalesce(approved_at, created_at) > now() - interval '1 day';
+
+  if v_age is not null and v_age < interval '7 days' then
+    v_flags := array_append(v_flags, 'alıcı hesabı yeni');
+  end if;
+  if v_pair >= 2 then
+    v_flags := array_append(v_flags, 'aynı çift çok işlem');
+  end if;
+  if v_day >= 8 then
+    v_flags := array_append(v_flags, 'günlük satış sınırı');
+  end if;
+
+  select title into v_title from public.listings where id = v_sale.listing_id;
+
+  update public.sales
+     set status = 'approved',
+         approved_at = now(),
+         counted = (coalesce(array_length(v_flags, 1), 0) = 0),
+         flag_reason = case when coalesce(array_length(v_flags, 1), 0) = 0 then null
+                            else array_to_string(v_flags, ', ') end
+   where id = p_sale;
+
+  perform public.recalc_sales_count(v_sale.seller_id);
+
+  perform public.notify(v_sale.seller_id, 'sale', 'Satış tamamlandı',
+    v_title || case when coalesce(array_length(v_flags, 1), 0) = 0
+                    then ' satışı onaylandı. Başarılı işlem sayın arttı.'
+                    else ' satışı onaylandı fakat incelemeye alındı.' end,
+    '/profil');
+  perform public.notify(v_sale.buyer_id, 'review', 'Siparişi değerlendir',
+    v_title || ' için satıcıyı değerlendir.', '/siparisler');
+end; $$;
+grant execute on function public.settle_sale(uuid) to authenticated;
+
+create or replace function public.approve_sale(p_sale uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_sale public.sales;
+begin
+  select * into v_sale from public.sales where id = p_sale;
+  if v_sale is null or (v_sale.buyer_id <> auth.uid() and not public.is_staff()) then
+    raise exception 'Yetkisiz';
+  end if;
+  perform public.settle_sale(p_sale);
+end; $$;
+grant execute on function public.approve_sale(uuid) to authenticated;
+
+create or replace function public.resolve_sales()
+returns integer language plpgsql security definer set search_path = public as $$
+declare r record; v_count integer := 0;
+begin
+  for r in select id from public.sales
+            where status in ('pending_buyer','confirmed')
+              and auto_approve_at < now()
+  loop
+    perform public.settle_sale(r.id);
+    v_count := v_count + 1;
+  end loop;
+  return v_count;
+end; $$;
+grant execute on function public.resolve_sales() to authenticated;
+
+create or replace function public.admin_sync_sales_count(p_user uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_staff_role() is distinct from 'owner' then raise exception 'Yetkisiz'; end if;
+  return public.recalc_sales_count(p_user);
+end; $$;
+grant execute on function public.admin_sync_sales_count(uuid) to authenticated;
+
+-- Sayılmayan (şüpheli) satıştan gelen değerlendirme de incelemeye düşsün
+create or replace function public.flag_review_from_sale()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.sale_id is not null and exists (
+    select 1 from public.sales s where s.id = new.sale_id and not s.counted
+  ) then
+    new.status := 'pending';
+    new.flag_reason := coalesce(nullif(new.flag_reason, '') || ', ', '') || 'şüpheli işlem';
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists reviews_flag_sale on public.reviews;
+create trigger reviews_flag_sale before insert on public.reviews
+for each row execute function public.flag_review_from_sale();
+
+-- Yetkili: işlemi say / saymayı kaldır
+create or replace function public.admin_set_sale_counted(p_sale uuid, p_counted boolean)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_seller uuid;
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+
+  update public.sales
+     set counted = p_counted,
+         flag_reason = case when p_counted then null else coalesce(flag_reason, 'yetkili kararı') end
+   where id = p_sale
+  returning seller_id into v_seller;
+
+  if v_seller is null then raise exception 'Satış bulunamadı'; end if;
+  perform public.recalc_sales_count(v_seller);
+end; $$;
+grant execute on function public.admin_set_sale_counted(uuid, boolean) to authenticated;
+
+
 -- ============================================================
 --  SON KONTROL — hepsi "var" görünmeli
 -- ============================================================
@@ -1719,7 +1865,8 @@ where pronamespace = 'public'::regnamespace
                   'admin_clear_conversation','after_review_delete','increment_listing_view',
                   'toggle_listing_favorite','seller_response_minutes','my_discount_limit',
                   'my_discount_usage','apply_listing_discount','cancel_listing_discount',
-                  'recalc_seller_rating','admin_set_review_status')
+                  'recalc_seller_rating','admin_set_review_status','settle_sale',
+                  'recalc_sales_count','admin_set_sale_counted')
 union all
 select 'depo: ' || id, 'var' from storage.buckets where id in ('avatars','listing-images')
 order by 1;
