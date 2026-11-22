@@ -20,6 +20,7 @@ import { ReasonDialog } from "@/components/admin/reason-dialog";
 import { MemberDetail } from "@/components/admin/member-detail";
 import { MemberSearch, type MemberHit } from "@/components/admin/member-search";
 import { deleteAccountAsStaff, purgeOrphanAccounts } from "@/lib/admin";
+import { BanDialog } from "@/components/admin/ban-dialog";
 import { BADGES, badgeLabel } from "@/lib/badges";
 import { AdminReviewList } from "@/components/admin/review-admin";
 import { ProfileEditor } from "@/components/admin/profile-editor";
@@ -136,6 +137,8 @@ type MemberRow = {
   verified_seller: boolean | null;
   staff_tag: string | null;
   banned: boolean | null;
+  banned_until?: string | null;
+  ban_reason?: string | null;
   created_at: string;
 };
 
@@ -169,6 +172,7 @@ export default function AdminPage() {
   const [frameQuery, setFrameQuery] = useState("");
   const [frameChoice, setFrameChoice] = useState("vip");
   const [confirmUser, setConfirmUser] = useState<MemberRow | null>(null);
+  const [banTarget, setBanTarget] = useState<MemberRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -310,19 +314,33 @@ export default function AdminPage() {
     }
 
     if (tab === "members" || tab === "usersDetails") {
+      // Süresi dolmuş askıları kapat
+      await supabase.rpc("expire_bans");
+
       let { data, error } = await supabase
         .from("profiles")
-        .select("id, username, email, sales_count, verified_seller, staff_tag, banned, created_at")
+        .select(
+          "id, username, email, sales_count, verified_seller, staff_tag, banned, banned_until, ban_reason, created_at",
+        )
         .order("created_at", { ascending: false })
         .limit(80);
 
       if (error) {
         const retry = await supabase
           .from("profiles")
-          .select("id, username, email, sales_count, verified_seller, created_at")
+          .select("id, username, email, sales_count, verified_seller, staff_tag, banned, created_at")
           .order("created_at", { ascending: false })
           .limit(80);
         data = retry.data as typeof data;
+      }
+
+      if (!data) {
+        const basic = await supabase
+          .from("profiles")
+          .select("id, username, email, sales_count, verified_seller, created_at")
+          .order("created_at", { ascending: false })
+          .limit(80);
+        data = basic.data as typeof data;
       }
 
       setMembers((data ?? []) as unknown as MemberRow[]);
@@ -788,6 +806,7 @@ export default function AdminPage() {
   async function adminMember(
     userId: string,
     action: "ban" | "unban" | "delete" | "demote",
+    days: number | null = null,
   ) {
     if (!supabase) return;
     setBusy(userId);
@@ -811,9 +830,28 @@ export default function AdminPage() {
       const { error } = await supabase.rpc("admin_set_banned", {
         p_user: userId,
         p_banned: action === "ban",
+        p_days: action === "ban" ? days : null,
       });
-      errorText = error?.message ?? null;
-      message = action === "ban" ? "Kullanıcı banlandı." : "Ban kaldırıldı.";
+
+      // Eski (tek imzalı) fonksiyon varsa süresiz olarak dene
+      if (error && /could not find the function|schema cache|does not exist/i.test(error.message)) {
+        const fallback = await supabase.rpc("admin_set_banned", {
+          p_user: userId,
+          p_banned: action === "ban",
+        });
+        errorText = fallback.error?.message ?? null;
+      } else {
+        errorText = error?.message ?? null;
+      }
+
+      if (!errorText) {
+        message =
+          action === "unban"
+            ? "Askı kaldırıldı."
+            : days && days > 0
+              ? `Kullanıcı ${days} gün askıya alındı.`
+              : "Kullanıcı kalıcı olarak askıya alındı.";
+      }
     }
 
     setBusy(null);
@@ -1636,7 +1674,14 @@ export default function AdminPage() {
                         {member.staff_tag && <StaffBadge tag={member.staff_tag} small />}
                         {member.banned && (
                           <span className="badge border border-danger/40 bg-danger/10 text-[0.55rem] text-danger">
-                            BANLI
+                            {member.banned_until
+                              ? `ASKI · ${Math.max(
+                                  1,
+                                  Math.ceil(
+                                    (new Date(member.banned_until).getTime() - Date.now()) / 86400000,
+                                  ),
+                                )} gün`
+                              : "KALICI ASKI"}
                           </span>
                         )}
                       </p>
@@ -1682,11 +1727,13 @@ export default function AdminPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => adminMember(member.id, member.banned ? "unban" : "ban")}
+                      onClick={() =>
+                        member.banned ? void adminMember(member.id, "unban") : setBanTarget(member)
+                      }
                       disabled={busy === member.id}
                       className="chip px-2 py-1 text-[0.65rem]"
                     >
-                      {member.banned ? "Banı kaldır" : "Banla"}
+                      {member.banned ? "Askıyı kaldır" : "Askıya Al"}
                     </button>
                     {role === "owner" && (
                       <>
@@ -2201,6 +2248,18 @@ export default function AdminPage() {
         busy={busy === "announce"}
         onConfirm={removeAnnouncement}
         onCancel={() => setConfirmAnnouncement(false)}
+      />
+
+      <BanDialog
+        open={Boolean(banTarget)}
+        username={banTarget?.username ?? null}
+        busy={Boolean(banTarget && busy === banTarget.id)}
+        onConfirm={(days) => {
+          const target = banTarget;
+          setBanTarget(null);
+          if (target) void adminMember(target.id, "ban", days);
+        }}
+        onCancel={() => setBanTarget(null)}
       />
 
       <ConfirmDialog
