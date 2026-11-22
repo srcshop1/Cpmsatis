@@ -220,8 +220,19 @@ export function ChatClient() {
           await markMessagesRead(supabase, conversation.id, user.id);
         }
         const rows = await loadMessages(supabase, conversation.id, clearedAt);
+
+        if (rows.length === 0) {
+          // Boş liste, "hata" mı "gerçekten temizlendi" mi? Say ile doğrula.
+          const { count } = await supabase
+            .from("messages")
+            .select("id", { count: "exact", head: true })
+            .eq("conversation_id", conversation.id);
+          // Sohbet yetkili tarafından temizlendiyse karşı tarafta da anında boşalsın
+          if ((count ?? 0) === 0) setMessages([]);
+          return;
+        }
+
         setMessages((prev) => {
-          if (rows.length === 0) return prev;
           // Henüz sunucudan gelmemiş yerel (optimistik) mesajları koru
           const pending = prev.filter(
             (message) =>
@@ -278,6 +289,17 @@ export function ChatClient() {
           schema: "public",
           table: "messages",
           filter: `conversation_id=eq.${conversation.id}`,
+        },
+        () => {
+          void refreshRef.current();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "messages",
         },
         () => {
           void refreshRef.current();
