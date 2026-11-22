@@ -1,7 +1,7 @@
 "use client";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PROFANITY_MESSAGE, hasProfanity } from "@/lib/profanity";
+import { censorProfanity } from "@/lib/profanity";
 
 export type ProfileMini = {
   id: string;
@@ -326,10 +326,10 @@ export async function sendMessage(
     replyTo?: Message["reply_to"];
   },
 ): Promise<{ error: string | null }> {
-  const body = input.body.trim();
-  if (!body) return { error: "Mesaj boş olamaz." };
+  // Küfür engellenmez, sansürlenir
+  const body = censorProfanity(input.body.trim()).slice(0, 4000);
+  if (!body.trim()) return { error: "Mesaj boş olamaz." };
   if (body.length > 4000) return { error: "Mesaj çok uzun." };
-  if (hasProfanity(body)) return { error: PROFANITY_MESSAGE };
 
   const base = {
     conversation_id: input.conversationId,
