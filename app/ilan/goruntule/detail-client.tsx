@@ -678,6 +678,14 @@ export function ListingDetailClient() {
                       {review.comment}
                     </p>
                   )}
+                  {review.reply && (
+  <div className="mt-1.5 rounded-lg border-l-2 border-accent/60 bg-white/5 px-2.5 py-1.5">
+    <p className="text-[0.6rem] font-semibold text-accent">Satıcı yanıtı</p>
+    <p className="mt-0.5 whitespace-pre-line break-words text-[0.74rem] leading-relaxed text-muted">
+      {review.reply}
+    </p>
+  </div>
+)}
                   <p className="mt-1 text-[0.6rem] text-muted-2">
                     {new Date(review.created_at).toLocaleDateString("tr-TR")}
                   </p>

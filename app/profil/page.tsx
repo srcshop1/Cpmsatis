@@ -19,7 +19,13 @@ import { Spinner } from "@/components/ui/spinner";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { blobToDataUrl, prepareAvatar, storageErrorMessage } from "@/lib/image";
 import { MAX_USERNAME_LENGTH, validateUsername } from "@/lib/validation";
-import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
+import {
+  averageReviews,
+  loadReviews,
+  replyToReview,
+  type Review,
+  type ReviewAverages,
+} from "@/lib/sales";
 import { myStaffRole } from "@/lib/social";
 import { findFrame, frames, ownedFrames } from "@/lib/frames";
 import { StaffBadge, VerifiedBadge } from "@/components/user-badge";
@@ -48,6 +54,10 @@ export default function ProfilePage() {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [frameBusy, setFrameBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [replyId, setReplyId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replyBusy, setReplyBusy] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.username) setUsername(user.username);
@@ -172,6 +182,24 @@ export default function ProfilePage() {
       return;
     }
     await refreshUser();
+  }
+
+  async function sendReply(review: Review) {
+    if (!supabase || !user) return;
+    setReplyBusy(true);
+    setReplyError(null);
+    const result = await replyToReview(supabase, review.id, replyText);
+    if (result.error) {
+      setReplyBusy(false);
+      setReplyError("Cevap gönderilemedi. Lütfen tekrar dene.");
+      return;
+    }
+    const rows = await loadReviews(supabase, { sellerId: user.id }, 50);
+    setReviews(rows);
+    setAverages(averageReviews(rows));
+    setReplyBusy(false);
+    setReplyId(null);
+    setReplyText("");
   }
 
   async function saveUsername() {
@@ -385,6 +413,60 @@ export default function ProfilePage() {
               </div>
               {review.comment && (
                 <p className="mt-1.5 text-[0.78rem] leading-relaxed text-muted">{review.comment}</p>
+              )}
+
+              {review.reply ? (
+                <div className="mt-2 rounded-lg border-l-2 border-accent/60 bg-white/5 px-2.5 py-1.5">
+                  <p className="text-[0.6rem] font-semibold text-accent">Yanıtın</p>
+                  <p className="mt-0.5 whitespace-pre-line break-words text-[0.74rem] leading-relaxed text-muted">
+                    {review.reply}
+                  </p>
+                </div>
+              ) : replyId === review.id ? (
+                <div className="mt-2">
+                  <textarea
+                    value={replyText}
+                    onChange={(event) => setReplyText(event.target.value)}
+                    rows={3}
+                    maxLength={500}
+                    placeholder="Değerlendirmeye cevap yaz…"
+                    className="field resize-none text-[0.78rem] leading-relaxed"
+                  />
+                  {replyError && <p className="mt-1 text-[0.68rem] text-danger">{replyError}</p>}
+                  <div className="mt-1.5 flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReplyId(null);
+                        setReplyText("");
+                        setReplyError(null);
+                      }}
+                      className="btn btn-ghost h-8 flex-1 text-[0.7rem]"
+                    >
+                      Vazgeç
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void sendReply(review)}
+                      disabled={replyBusy || replyText.trim().length < 2}
+                      className="btn btn-primary h-8 flex-1 text-[0.7rem]"
+                    >
+                      {replyBusy ? "…" : "Gönder"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplyId(review.id);
+                    setReplyText("");
+                    setReplyError(null);
+                  }}
+                  className="mt-1.5 text-[0.68rem] font-semibold text-accent"
+                >
+                  Cevapla
+                </button>
               )}
             </div>
           ))}

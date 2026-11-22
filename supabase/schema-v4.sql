@@ -375,6 +375,30 @@ returns void language sql security definer set search_path = public as $$
 $$;
 revoke all on function public.notify(uuid,text,text,text,text) from public;
 
+-- ---------- 5i) DEĞERLENDİRMEYE CEVAP ----------
+alter table public.reviews add column if not exists reply text;
+alter table public.reviews add column if not exists replied_at timestamptz;
+
+create or replace function public.reply_review(p_review uuid, p_reply text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_buyer uuid; v_seller uuid; v_title text;
+begin
+  if coalesce(btrim(p_reply), '') = '' then raise exception 'Cevap boş olamaz'; end if;
+
+  select buyer_id, seller_id into v_buyer, v_seller from public.reviews where id = p_review;
+  if v_seller is null or v_seller <> auth.uid() then raise exception 'Yetkisiz'; end if;
+
+  update public.reviews
+     set reply = left(btrim(p_reply), 500),
+         replied_at = now()
+   where id = p_review;
+
+  select username into v_title from public.profiles where id = v_seller;
+  perform public.notify(v_buyer, 'review', 'Değerlendirmene yanıt geldi',
+           coalesce(v_title, 'Satıcı') || ' değerlendirmene cevap yazdı.', '/profil');
+end; $$;
+grant execute on function public.reply_review(uuid, text) to authenticated;
+
 -- ---------- 6) ÖNBELLEK ----------
 notify pgrst, 'reload schema';
 
