@@ -16,6 +16,8 @@ import {
   MessageIcon,
   ShareIcon,
   ShieldIcon,
+  SparkIcon,
+  UserIcon,
   TrashIcon,
   StarIcon,
   WhatsAppIcon,
@@ -33,7 +35,10 @@ import {
   listingExpiresAt,
   loadListingCounters,
   loadRelatedListings,
+  loadResponseMinutes,
   loadSellerListings,
+  priceDrop,
+  responseLabel,
   registerListingView,
   renewListing,
   toggleListingFavorite,
@@ -65,6 +70,8 @@ type Detail = {
   seller_id: string;
   view_count?: number | null;
   favorite_count?: number | null;
+  previous_price?: number | null;
+  price_dropped_at?: string | null;
 };
 
 const REVIEW_ROWS = [
@@ -111,6 +118,7 @@ export function ListingDetailClient() {
   const [favBusy, setFavBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [related, setRelated] = useState<Listing[]>([]);
+  const [responseMinutes, setResponseMinutes] = useState<number | null>(null);
   const [sellerListings, setSellerListings] = useState<Listing[]>([]);
 
   const isOwner = Boolean(user && listing && user.id === listing.seller_id);
@@ -135,7 +143,7 @@ export function ListingDetailClient() {
 
       let queryResult = await supabase
         .from(LISTINGS_TABLE)
-        .select(`${baseColumns},categories,view_count,favorite_count`)
+        .select(`${baseColumns},categories,view_count,favorite_count,previous_price,price_dropped_at`)
         .eq("id", listingId)
         .maybeSingle();
 
@@ -212,6 +220,10 @@ export function ListingDetailClient() {
           if (!cancelled) setFavorited(value);
         });
       }
+
+      void loadResponseMinutes(supabase, detail.seller_id).then((minutes) => {
+        if (!cancelled) setResponseMinutes(minutes);
+      });
 
       const profiles = await loadProfileMini(supabase, [detail.seller_id]);
       if (cancelled) return;
@@ -564,9 +576,20 @@ export function ListingDetailClient() {
                   {listing.title}
                 </h1>
               </div>
-              <p className="shrink-0 text-xl font-extrabold text-accent">
-                <Price value={listing.price} iconSize={20} />
-              </p>
+              <div className="shrink-0 text-right">
+                <p className="text-xl font-extrabold text-accent">
+                  <Price value={listing.price} iconSize={20} />
+                </p>
+                {(() => {
+                  const drop = priceDrop(listing);
+                  if (!drop) return null;
+                  return (
+                    <p className="mt-1 inline-flex items-center gap-1 rounded-md border border-mint/40 bg-mint/10 px-1.5 py-0.5 text-[0.6rem] font-bold text-mint">
+                      FİYAT DÜŞTÜ · <span className="line-through opacity-70">{drop.previous.toLocaleString("tr-TR")}</span>
+                    </p>
+                  );
+                })()}
+              </div>
             </div>
 
             <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.68rem] text-muted-2">
@@ -664,6 +687,20 @@ export function ListingDetailClient() {
                       ? `${sellerAverages.overall.toFixed(1)} (${sellerAverages.count})`
                       : "puan yok"}
                   </span>
+                  {responseLabel(responseMinutes) && (
+                    <span className="inline-flex items-center gap-1 text-mint">
+                      <ClockIcon width={11} height={11} /> {responseLabel(responseMinutes)}
+                    </span>
+                  )}
+                  {seller?.last_seen_at && (
+                    <span className="inline-flex items-center gap-1">
+                      <UserIcon width={11} height={11} />
+                      {new Date(seller.last_seen_at).getTime() > Date.now() - 10 * 60 * 1000
+                        ? "şu an aktif"
+                        : "son görülme " +
+                          new Date(seller.last_seen_at).toLocaleDateString("tr-TR")}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -693,6 +730,12 @@ export function ListingDetailClient() {
                   <StarIcon width={15} height={15} />
                   {featuredPending ? "Öne çıkarma talebi onay bekliyor" : "Öne Çıkarma Talebi Gönder"}
                 </button>
+                <Link
+                  href={`/ilan/duzenle?id=${listing.id}`}
+                  className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-accent/40 bg-accent/10 text-sm font-semibold text-accent transition hover:bg-accent/20"
+                >
+                  <SparkIcon width={15} height={15} /> İlanı Düzenle
+                </Link>
                 <button
                   type="button"
                   onClick={renew}

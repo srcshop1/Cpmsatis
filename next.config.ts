@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
         trailingSlash: true,
       }
     : {}),
+  env: {
+    // Alt yol bilgisi istemci tarafında da gerekli (PWA, service worker)
+    NEXT_PUBLIC_BASE_PATH: isPages ? `/${repoName}` : "",
+  },
   images: { unoptimized: true },
   // Önizleme ortamı (e2b proxy) dev varlıklarına erişebilsin
   allowedDevOrigins: ["*.e2b.app", "localhost", "127.0.0.1"],

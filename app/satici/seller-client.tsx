@@ -18,7 +18,12 @@ import {
 } from "@/components/icons";
 import { ListingCard } from "@/components/listing-card";
 import { FramedAvatar, StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
-import { loadSellerListings, type Listing } from "@/lib/listings";
+import {
+  loadResponseMinutes,
+  loadSellerListings,
+  responseLabel,
+  type Listing,
+} from "@/lib/listings";
 import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
 import { findOrCreateConversation } from "@/lib/social";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -52,6 +57,7 @@ export function SellerShowcaseClient() {
   const [averages, setAverages] = useState<ReviewAverages | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "missing">("loading");
   const [copied, setCopied] = useState(false);
+  const [responseMinutes, setResponseMinutes] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -101,6 +107,9 @@ export function SellerShowcaseClient() {
       setListings(rows);
       setReviews(sellerReviews);
       setAverages(averageReviews(sellerReviews));
+
+      const minutes = await loadResponseMinutes(supabase, sellerId);
+      if (!cancelled) setResponseMinutes(minutes);
     })();
 
     return () => {
@@ -211,6 +220,11 @@ export function SellerShowcaseClient() {
                 <span className="inline-flex items-center gap-1 text-mint">
                   <CheckIcon width={12} height={12} /> {profile.sales_count ?? 0} başarılı işlem
                 </span>
+                {responseLabel(responseMinutes) && (
+                  <span className="inline-flex items-center gap-1 text-mint">
+                    <MessageIcon width={11} height={11} /> {responseLabel(responseMinutes)}
+                  </span>
+                )}
                 <span className="inline-flex items-center gap-1">
                   <ClockIcon width={12} height={12} />
                   {new Date(profile.created_at).toLocaleDateString("tr-TR", {
