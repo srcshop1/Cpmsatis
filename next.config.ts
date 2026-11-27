@@ -4,19 +4,28 @@ import type { NextConfig } from "next";
 const isPages = process.env.GITHUB_PAGES === "true";
 const repoName = "Cpmsatis";
 
+// Alt yol: proje adresinde /Cpmsatis, kendi alan adında kök.
+// NEXT_PUBLIC_BASE_PATH verilirse o kullanılır ("" = kök alan adı).
+const basePath =
+  process.env.NEXT_PUBLIC_BASE_PATH !== undefined
+    ? process.env.NEXT_PUBLIC_BASE_PATH
+    : isPages
+      ? `/${repoName}`
+      : "";
+
 const nextConfig: NextConfig = {
   // GitHub Pages için statik dışa aktarım
   ...(isPages
     ? {
         output: "export" as const,
-        basePath: `/${repoName}`,
-        assetPrefix: `/${repoName}/`,
+        basePath,
+        assetPrefix: basePath ? `${basePath}/` : "",
         trailingSlash: true,
       }
     : {}),
   env: {
     // Alt yol bilgisi istemci tarafında da gerekli (PWA, service worker)
-    NEXT_PUBLIC_BASE_PATH: isPages ? `/${repoName}` : "",
+    NEXT_PUBLIC_BASE_PATH: basePath,
   },
   images: { unoptimized: true },
   // Önizleme ortamı (e2b proxy) dev varlıklarına erişebilsin

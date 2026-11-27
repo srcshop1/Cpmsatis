@@ -7,4 +7,4 @@ Disallow: /siparisler/
 Disallow: /yetkili/
 Disallow: /panel/
 
-Sitemap: https://srcshop1.github.io/Cpmsatis/sitemap.xml
+Sitemap: https://cpmsatis.duckdns.org/sitemap.xml
