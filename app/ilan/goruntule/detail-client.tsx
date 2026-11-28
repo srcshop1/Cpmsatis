@@ -948,23 +948,6 @@ export function ListingDetailClient() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={shareOnWhatsApp}
-                className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-mint/40 bg-mint/10 text-[0.75rem] font-semibold text-mint transition hover:bg-mint/20"
-              >
-                <ShareIcon width={15} height={15} /> WhatsApp'ta paylaş
-              </button>
-              <button
-                type="button"
-                onClick={() => void copyLink()}
-                className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-line bg-white/4 text-[0.75rem] font-semibold text-muted transition hover:text-text"
-              >
-                {copied ? <CheckIcon width={15} height={15} /> : <CopyIcon width={15} height={15} />}
-              {copied ? "Link kopyalandı" : "Linki kopyala"}
-            </button>
-          </div>
         </div>
       )}
 

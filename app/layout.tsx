@@ -10,31 +10,31 @@ const SITE_URL = (
 const SITE_NAME = "CPM Satış";
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
 const SITE_DESC =
-  "CPM araç, çizim ve hesap alım-satımı. İlan ver, filtrele, satıcıyla mesajlaşarak anlaş.";
+  "CPM araç, çizim ve krom ilanları. İlan ver, filtrele, satıcıyla mesajlaşarak anlaş.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} — CPM araç, çizim ve hesap alım-satımı`,
+    default: `${SITE_NAME} — CPM araç, çizim ve krom ilanları`,
     template: `%s · ${SITE_NAME}`,
   },
   description: SITE_DESC,
   applicationName: SITE_NAME,
-  keywords: ["CPM", "CPM satış", "CPM ilan", "çizim", "araç", "hesap satış", "takas"],
+  keywords: ["CPM", "CPM satış", "CPM ilan", "çizim", "araç", "krom", "takas"],
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     locale: "tr_TR",
     url: SITE_URL,
     siteName: SITE_NAME,
-    title: `${SITE_NAME} — CPM araç, çizim ve hesap alım-satımı`,
+    title: `${SITE_NAME} — CPM araç, çizim ve krom ilanları`,
     description: SITE_DESC,
     images: [
       {
-        url: `${SITE_URL}/og.png`,
+        url: `${SITE_URL}/og-v2.png`,
         width: 1200,
         height: 630,
-        alt: "CPM Satış — CPM araç, çizim ve hesap alım satımı",
+        alt: "CPM Satış — CPM araç, çizim ve krom ilanları",
       },
     ],
   },
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: `${SITE_NAME} — CPM ilan pazarı`,
     description: SITE_DESC,
-    images: [`${SITE_URL}/og.png`],
+    images: [`${SITE_URL}/og-v2.png`],
   },
   robots: { index: true, follow: true },
   manifest: `${BASE}/manifest.webmanifest`,

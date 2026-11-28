@@ -271,7 +271,7 @@ export default function CreateListingPage() {
             maxLength={MAX_LISTING_TITLE}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="ör. CPM 2 · 2 aylık hesap · 6 araç"
+            placeholder="ör. CPM 2 · 6 araç · krom jant"
           />
         </section>
 

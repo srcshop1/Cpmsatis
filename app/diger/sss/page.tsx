@@ -8,7 +8,7 @@ import { ChevronDownIcon, ChevronLeftIcon } from "@/components/icons";
 const faqs = [
   {
     q: "CPM Satış nedir?",
-    a: "Car Parking Multiplayer (CPM 1 ve CPM 2) oyuncularının hesap, çizim, krom ve takas ilanları paylaştığı dijital ilan platformudur.",
+    a: "Car Parking Multiplayer (CPM 1 ve CPM 2) oyuncularının araç, çizim, krom ve takas ilanları paylaştığı dijital ilan platformudur.",
   },
   {
     q: "Sitede ödeme yapılıyor mu?",
