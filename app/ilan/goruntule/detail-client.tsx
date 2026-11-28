@@ -25,6 +25,7 @@ import {
 } from "@/components/icons";
 import { ListingCard } from "@/components/listing-card";
 import { Price } from "@/components/price";
+import { ImageViewer } from "@/components/image-viewer";
 import { sortTags } from "@/lib/badges";
 import { formatPriceLabel } from "@/lib/catalog";
 import {
@@ -99,6 +100,7 @@ export function ListingDetailClient() {
   const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   const [contactOpen, setContactOpen] = useState(false);
   const [contactText, setContactText] = useState("Merhaba, bu ilan hâlâ satılık mı?");
@@ -500,12 +502,19 @@ export function ListingDetailClient() {
           >
             <div className="relative">
               {listing.images && listing.images.length > 0 ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={listing.images[index]}
-                  alt={listing.title}
-                  className="max-h-[520px] w-full object-contain"
-                />
+                <button
+                  type="button"
+                  onClick={() => setViewerOpen(true)}
+                  className="block w-full"
+                  aria-label="Görseli tam ekran aç"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={listing.images[index]}
+                    alt={listing.title}
+                    className="max-h-[520px] w-full object-contain"
+                  />
+                </button>
               ) : (
                 <div className="grid aspect-square w-full place-items-center text-4xl text-muted-2">
                   🖼️
@@ -950,6 +959,29 @@ export function ListingDetailClient() {
 
         </div>
       )}
+
+      {viewerOpen && listing && (listing.images?.length ?? 0) > 0
+        ? (() => {
+            const gallery = listing.images ?? [];
+            return (
+              <ImageViewer
+                src={gallery[index]}
+                alt={listing.title}
+                onClose={() => setViewerOpen(false)}
+                onPrev={
+                  gallery.length > 1
+                    ? () => setIndex((prev) => (prev === 0 ? gallery.length - 1 : prev - 1))
+                    : undefined
+                }
+                onNext={
+                  gallery.length > 1
+                    ? () => setIndex((prev) => (prev === gallery.length - 1 ? 0 : prev + 1))
+                    : undefined
+                }
+              />
+            );
+          })()
+        : null}
 
       {featuredOpen && (
         <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center">
