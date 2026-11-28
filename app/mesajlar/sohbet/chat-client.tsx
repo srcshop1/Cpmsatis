@@ -784,7 +784,7 @@ export function ChatClient() {
               >
                 <div
                   style={dragging !== 0 ? { transform: `translateX(${dragging}px)` } : undefined}
-                  className={`max-w-[85%] rounded-2xl px-3 py-2 text-[0.82rem] leading-relaxed transition-transform ${
+                  className={`msg-in max-w-[85%] rounded-2xl px-3 py-2 text-[0.82rem] leading-relaxed transition-transform ${
                     mine
                       ? "rounded-br-md bg-gradient-to-br from-[#3b82f6] to-[#1d4ed8] text-white"
                       : "rounded-bl-md border border-line bg-surface-2 text-text"

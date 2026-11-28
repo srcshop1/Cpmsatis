@@ -131,7 +131,14 @@ function NavButton({
       }`}
       aria-current={active ? "page" : undefined}
     >
-      <span className={`relative ${active ? "text-accent" : ""}`}>
+      <span
+        className={`relative grid place-items-center transition-transform duration-200 ${
+          active ? "text-accent -translate-y-0.5" : ""
+        }`}
+      >
+        {active && (
+          <span className="absolute -inset-x-2.5 -inset-y-1 -z-10 rounded-lg bg-accent/12" />
+        )}
         {item.icon({ width: 21, height: 21 })}
         {badge > 0 && (
           <span className="absolute -right-2.5 -top-1.5 grid h-4 min-w-[1rem] place-items-center rounded-full bg-danger px-1 text-[0.55rem] font-bold leading-none text-white">

@@ -551,3 +551,106 @@ select,
   user-select: text;
   -webkit-touch-callout: default;
 }
+
+/* ---------- Hareket ---------- */
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.reveal {
+  animation: reveal-up 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.msg-in {
+  animation: msg-in 0.22s ease-out both;
+}
+
+@keyframes badge-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 138, 31, 0.45);
+  }
+  55% {
+    box-shadow: 0 0 0 5px rgba(255, 138, 31, 0);
+  }
+}
+.badge-pulse {
+  animation: badge-pulse 2.2s ease-out infinite;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page-in {
+  animation: page-in 0.28s ease-out both;
+}
+
+/* Üst çubuk kaydırınca hafifçe yükselir */
+header.header-raised {
+  background: rgba(7, 9, 13, 0.96);
+  box-shadow: 0 12px 34px -20px rgba(0, 0, 0, 0.95);
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+/* Dokunma geri bildirimi */
+.btn,
+.chip,
+.card-hover {
+  transition:
+    transform 0.14s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+.btn:active:not(:disabled),
+.chip:active,
+.card-hover:active {
+  transform: scale(0.97);
+}
+
+/* Fotoğraflar yüklenirken yumuşak belirir */
+.img-fade {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.img-fade.loaded {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .msg-in,
+  .page-in,
+  .badge-pulse {
+    animation: none;
+  }
+  .btn:active:not(:disabled),
+  .chip:active,
+  .card-hover:active {
+    transform: none;
+  }
+}
