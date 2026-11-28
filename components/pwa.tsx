@@ -31,7 +31,7 @@ function isStandalone() {
 }
 
 const AUTO_KEY = "cpm-install-auto";
-const AUTO_COOLDOWN = 2 * 24 * 60 * 60 * 1000; // 2 günde bir dener
+const AUTO_COOLDOWN = 30 * 24 * 60 * 60 * 1000; // ayda bir dener
 
 /** Kurulum penceresini ilk dokunuşta kendiliğinden açar. */
 function armAutoInstall() {
