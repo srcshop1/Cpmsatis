@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { AppErrorGuard } from "@/components/app-error-guard";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { BanGate } from "@/components/ban-gate";
 import { PwaSetup } from "@/components/pwa";
 import "./globals.css";
 
@@ -68,7 +69,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen antialiased">
         <PwaSetup />
         <AppErrorGuard />
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <BanGate>{children}</BanGate>
+        </AuthProvider>
       </body>
     </html>
   );

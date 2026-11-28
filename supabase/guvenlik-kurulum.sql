@@ -1232,3 +1232,72 @@ end; $$;
 drop trigger if exists messages_ban_guard on public.messages;
 create trigger messages_ban_guard before insert on public.messages
 for each row execute function public.guard_banned_message();
+
+
+-- ---------- 5ai) ASKIYA ALAN YETKİLİ + TAM ERİŞİM ENGELİ ----------
+alter table public.profiles add column if not exists banned_by uuid references public.profiles (id) on delete set null;
+
+create or replace function public.admin_set_banned(
+  p_user uuid,
+  p_banned boolean,
+  p_days integer default null,
+  p_reason text default null
+) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+  if p_user = auth.uid() then raise exception 'Kendini askıya alamazsın'; end if;
+  if (select role from public.user_roles where user_id = p_user) = 'owner' then
+    raise exception 'Kurucu askıya alınamaz';
+  end if;
+  if not exists (select 1 from public.profiles where id = p_user) then
+    raise exception 'Kullanıcı bulunamadı';
+  end if;
+
+  if p_banned then
+    update public.profiles
+       set banned = true,
+           banned_until = case
+             when p_days is null or p_days <= 0 then null
+             else now() + make_interval(days => least(greatest(p_days, 1), 3650))
+           end,
+           ban_reason = nullif(trim(coalesce(p_reason, '')), ''),
+           banned_by = auth.uid()
+     where id = p_user;
+
+    update public.listings set status = 'hidden'
+     where seller_id = p_user and status = 'active';
+  else
+    update public.profiles
+       set banned = false, banned_until = null, ban_reason = null, banned_by = null
+     where id = p_user;
+  end if;
+end; $$;
+grant execute on function public.admin_set_banned(uuid, boolean, integer, text) to authenticated;
+
+-- Süresi dolan askıda "kim askıya aldı" bilgisi de temizlenir
+create or replace function public.expire_bans()
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer := 0;
+begin
+  update public.profiles
+     set banned = false, banned_until = null, ban_reason = null, banned_by = null
+   where banned and banned_until is not null and banned_until <= now();
+  get diagnostics v_count = row_count;
+  return v_count;
+end; $$;
+grant execute on function public.expire_bans() to authenticated;
+
+-- Askıdaki hesap ilanları ve mesajları OKUYAMAZ (sunucu tarafı)
+drop policy if exists "Askıdaki hesap ilan göremez" on public.listings;
+create policy "Askıdaki hesap ilan göremez" on public.listings as restrictive for select
+  using (not public.ban_active(auth.uid()));
+
+drop policy if exists "Askıdaki hesap sohbet göremez" on public.messages;
+create policy "Askıdaki hesap sohbet göremez" on public.messages as restrictive for select
+  using (not public.ban_active(auth.uid()));
+
+drop policy if exists "Askıdaki hesap konuşma göremez" on public.conversations;
+create policy "Askıdaki hesap konuşma göremez" on public.conversations as restrictive for select
+  using (not public.ban_active(auth.uid()));
+
+notify pgrst, 'reload schema';
