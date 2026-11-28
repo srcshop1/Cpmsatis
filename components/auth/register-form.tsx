@@ -15,6 +15,7 @@ import {
   validatePasswordConfirm,
   validateUsername,
 } from "@/lib/validation";
+import { GoogleButton } from "./google-button";
 import { TextField } from "./text-field";
 
 type FieldName = "username" | "email" | "password" | "passwordConfirm";
@@ -93,6 +94,17 @@ export function RegisterForm({ nextPath }: { nextPath?: string }) {
     values.passwordConfirm.length > 0 && values.password === values.passwordConfirm;
 
   return (
+    <div className="space-y-4">
+      <GoogleButton label="Google ile Kayıt Ol" nextPath={nextPath} />
+
+      <div className="flex items-center gap-3">
+        <span className="h-px flex-1 bg-line" />
+        <span className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted-2">
+          veya
+        </span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
+
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
       {serverError && (
         <div
@@ -206,5 +218,6 @@ export function RegisterForm({ nextPath }: { nextPath?: string }) {
         </Link>
       </p>
     </form>
+    </div>
   );
 }
