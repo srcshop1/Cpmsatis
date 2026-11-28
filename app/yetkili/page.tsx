@@ -1108,7 +1108,7 @@ export default function AdminPage() {
     setBusy(null);
     setNotice(
       errorText
-        ? "İşlem tamamlanamadı. Lütfen tekrar dene."
+        ? `Etiket işlemi başarısız: ${errorText}`
         : `${remove ? "Kaldırıldı" : "Verildi"}: ${tag}`,
     );
     await loadTab();
@@ -1119,8 +1119,20 @@ export default function AdminPage() {
     setBusy(`${userId}-role`);
     setNotice(null);
     const { error } = await supabase.rpc("admin_set_role", { p_user: userId, p_role: role });
+
+    let errorText = error?.message ?? null;
+    if (errorText && /could not find the function|schema cache|does not exist/i.test(errorText)) {
+      const direct = await supabase
+        .from("user_roles")
+        .upsert({ user_id: userId, role, granted_by: user?.id ?? null }, { onConflict: "user_id" });
+      errorText = direct.error?.message ?? null;
+      if (!errorText) {
+        await supabase.from("profiles").update({ staff_tag: role }).eq("id", userId);
+      }
+    }
+
     setBusy(null);
-    setNotice(error ? "Rol verilemedi. Lütfen tekrar dene." : `Rol verildi: ${role}`);
+    setNotice(errorText ? `Rol verilemedi: ${errorText}` : `Rol verildi: ${role}`);
     await loadTab();
   }
 
@@ -1229,9 +1241,7 @@ export default function AdminPage() {
 
       setBusy(null);
       if (fallback.error) {
-        setNotice(
-          "Etiket kaydedilemedi. Lütfen tekrar dene.",
-        );
+        setNotice(`Etiket kaydedilemedi: ${fallback.error.message}`);
         return;
       }
       if (tagChoice === "verified_seller") {
@@ -1249,7 +1259,7 @@ export default function AdminPage() {
     setBusy(null);
     setNotice(
       error
-        ? "İşlem tamamlanamadı. Lütfen tekrar dene."
+        ? `Etiket işlemi başarısız: ${error.message}`
         : `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${badgeLabel(tagChoice)}`,
     );
   }
@@ -1269,9 +1279,7 @@ export default function AdminPage() {
     });
     setBusy(null);
     setNotice(
-      error
-        ? "İşlem tamamlanamadı. Lütfen tekrar dene."
-        : `@${profile.username} artık ${roleChoice}.`,
+      error ? `Rol verilemedi: ${error.message}` : `@${profile.username} artık ${roleChoice}.`,
     );
   }
 

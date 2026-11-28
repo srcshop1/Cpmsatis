@@ -108,18 +108,23 @@ export async function deleteAccountAsStaff(
 ): Promise<{ error: string | null; partial?: boolean }> {
   const { data, error } = await supabase.rpc("admin_delete_account", { p_user: userId });
 
-  if (error) {
-    if (/kurucu|kendi hesab/i.test(error.message)) {
-      return { error: error.message };
-    }
-    if (!missingFunction(error.message)) {
-      return { error: "Hesap silinemedi. Tekrar dene." };
-    }
+  if (error && !missingFunction(error.message)) {
+    return { error: error.message };
   }
 
-  if (error && missingFunction(error.message)) {
-    const fallback = await supabase.from("profiles").delete().eq("id", userId);
-    if (fallback.error) return { error: "Hesap silinemedi. Tekrar dene." };
+  if (error) {
+    // Fonksiyon yok: önce bağlı kayıtları temizle, sonra profili sil
+    await supabase.from("user_roles").delete().eq("user_id", userId);
+    await supabase.from("user_tags").delete().eq("user_id", userId);
+    await supabase.from("user_frames").delete().eq("user_id", userId);
+    await supabase.from("notifications").delete().eq("user_id", userId);
+    await supabase.from("listings").delete().eq("seller_id", userId);
+
+    const fallback = await supabase.from("profiles").delete().eq("id", userId).select("id");
+    if (fallback.error) return { error: fallback.error.message };
+    if ((fallback.data ?? []).length === 0) {
+      return { error: "Silme yetkisi yok. panel-kurulum.sql dosyasını çalıştır." };
+    }
   }
 
   // Gerçekten silindi mi? Kontrol et.
@@ -129,7 +134,7 @@ export async function deleteAccountAsStaff(
     .eq("id", userId)
     .maybeSingle();
 
-  if (row) return { error: "Hesap silinemedi. Tekrar dene." };
+  if (row) return { error: "Profil silinmedi (yetki yok). panel-kurulum.sql dosyasını çalıştır." };
 
   return { error: null, partial: data === "profil" };
 }
