@@ -1983,9 +1983,7 @@ export default function AdminPage() {
                   onClick={() => setFrameChoice(frame.slug)}
                   className={`chip ${frameChoice === frame.slug ? "chip-active" : ""}`}
                 >
-                  <span
-                    className={`inline-block h-2.5 w-2.5 rounded-full bg-gradient-to-br ${frame.tone}`}
-                  />
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-gradient-to-br from-accent to-accent-deep" />
                   {frame.name}
                 </button>
               ))}

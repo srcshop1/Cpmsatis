@@ -29,7 +29,17 @@ import {
   type ReviewAverages,
 } from "@/lib/sales";
 import { myStaffRole } from "@/lib/social";
-import { findFrame, frames, ownedFrames } from "@/lib/frames";
+import { loadResponseMinutes } from "@/lib/listings";
+import {
+  achievementFrames,
+  emptyFrameStats,
+  findFrame,
+  frameProgress,
+  isFrameUnlocked,
+  ownedFrames,
+  tagFrames,
+  type FrameStats,
+} from "@/lib/frames";
 import { StaffBadge, VerifiedBadge } from "@/components/user-badge";
 import { FrameRing } from "@/components/frame-ring";
 import { InstallAppButton } from "@/components/pwa";
@@ -53,6 +63,7 @@ export default function ProfilePage() {
 
   const [tags, setTags] = useState<string[]>([]);
   const [grantedFrames, setGrantedFrames] = useState<string[]>([]);
+  const [frameStats, setFrameStats] = useState<FrameStats>(emptyFrameStats);
   const [role, setRole] = useState<string | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [averages, setAverages] = useState<ReviewAverages | null>(null);
@@ -102,6 +113,44 @@ export default function ProfilePage() {
         setReviews(rows);
         setAverages(averageReviews(rows));
       }
+
+      // Başarı çerçeveleri için istatistikler
+      const [profileRes, listingRes, minutes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("rating, review_count, sales_count, created_at")
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("listings")
+          .select("id, status, view_count, favorite_count")
+          .eq("seller_id", user.id),
+        loadResponseMinutes(supabase, user.id),
+      ]);
+
+      if (cancelled) return;
+
+      const profileRow = profileRes.data as
+        | { rating: number | null; review_count: number | null; sales_count: number | null; created_at: string }
+        | null;
+      const listingRows = (listingRes.data ?? []) as unknown as {
+        status: string | null;
+        view_count: number | null;
+        favorite_count: number | null;
+      }[];
+
+      setFrameStats({
+        reviews: Number(profileRow?.review_count ?? rows.length ?? 0),
+        rating: Number(profileRow?.rating ?? 0),
+        sales: Number(profileRow?.sales_count ?? 0),
+        responseMinutes: minutes,
+        memberDays: profileRow?.created_at
+          ? Math.floor((Date.now() - new Date(profileRow.created_at).getTime()) / 86400000)
+          : 0,
+        listings: listingRows.filter((row) => row.status === "active").length,
+        views: listingRows.reduce((sum, row) => sum + Number(row.view_count ?? 0), 0),
+        favorites: listingRows.reduce((sum, row) => sum + Number(row.favorite_count ?? 0), 0),
+      });
     };
 
     void load();
@@ -178,10 +227,16 @@ export default function ProfilePage() {
   async function equipFrame(slug: string) {
     if (!supabase || !user) return;
     setFrameBusy(slug);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ equipped_frame: slug })
-      .eq("id", user.id);
+    let { error } = await supabase.rpc("set_frame", { p_frame: slug });
+
+    if (error && /could not find the function|schema cache/i.test(error.message)) {
+      const direct = await supabase
+        .from("profiles")
+        .update({ equipped_frame: slug })
+        .eq("id", user.id);
+      error = direct.error;
+    }
+
     setFrameBusy(null);
     if (error) {
       setNotice("Çerçeve seçilemedi.");
@@ -341,10 +396,8 @@ export default function ProfilePage() {
         <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-accent/10 blur-3xl" />
         <div className="relative flex items-center gap-4">
           <div className="relative">
-            <span
-              className={`grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-gradient-to-br ${activeFrame.tone} p-[2px]`}
-            >
-              <span className="grid h-full w-full place-items-center overflow-hidden rounded-[14px] bg-ink text-2xl font-extrabold text-text">
+            <FrameRing frame={activeFrame.slug} size={64} rounded="rounded-2xl">
+              <span className="grid h-full w-full place-items-center overflow-hidden text-2xl font-extrabold text-text">
                 {user.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -352,7 +405,7 @@ export default function ProfilePage() {
                   user.username.charAt(0).toUpperCase()
                 )}
               </span>
-            </span>
+            </FrameRing>
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -602,10 +655,15 @@ export default function ProfilePage() {
       <section className="mt-4 card p-5">
         <h2 className="text-sm font-bold">Çerçeveler</h2>
         <p className="mt-1 text-[0.7rem] text-muted-2">
-          Sahip olduğun çerçeveyi seç. Kurucu/mod çerçeveleri yetkili tarafından verilir.
+          Beğendiğin çerçeveyi seç. Kilitli çerçeveler hedeflerine ulaşınca açılır.
         </p>
-        <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {frames.map((frame) => {
+
+        {/* TAG ÇERÇEVELERİ */}
+        <h3 className="mt-4 flex items-center gap-1.5 text-[0.72rem] font-bold text-muted">
+          <ShieldIcon width={13} height={13} className="text-accent" /> Tag Çerçeveleri
+        </h3>
+        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+          {tagFrames.map((frame) => {
             const unlocked = owned.has(frame.needs) || frame.needs === "member";
             const isActive = (user.frame ?? "member") === frame.slug;
             return (
@@ -637,6 +695,54 @@ export default function ProfilePage() {
                 </span>
                 {isActive && <span className="text-[0.55rem] font-semibold text-accent">aktif</span>}
                 {!unlocked && <span className="text-[0.55rem] text-muted-2">kilitli</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* BAŞARI ÇERÇEVELERİ */}
+        <h3 className="mt-5 flex items-center gap-1.5 text-[0.72rem] font-bold text-muted">
+          <StarIcon width={13} height={13} className="text-accent" /> Başarı Çerçeveleri
+        </h3>
+        <p className="mt-1 text-[0.65rem] text-muted-2">
+          Başarıların arttıkça açılır. Kilitli olanlarda hedefin ne kadar kaldığını görürsün.
+        </p>
+        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+          {achievementFrames.map((frame) => {
+            const unlocked = isFrameUnlocked(frame, frameStats);
+            const isActive = (user.frame ?? "member") === frame.slug;
+            const progress = unlocked ? null : frameProgress(frame, frameStats);
+            return (
+              <button
+                key={frame.slug}
+                type="button"
+                disabled={frameBusy === frame.slug}
+                onClick={() => {
+                  if (!unlocked) {
+                    setNotice(`Bu çerçeve kilitli. ${frame.hint}.`);
+                    return;
+                  }
+                  void equipFrame(frame.slug);
+                }}
+                className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
+                  isActive
+                    ? "border-accent/60 bg-accent/10"
+                    : unlocked
+                      ? "border-line-soft bg-white/3 hover:border-line"
+                      : "border-line-soft bg-white/2 opacity-55"
+                }`}
+                title={unlocked ? `${frame.name} çerçevesini seç` : frame.hint}
+              >
+                <FrameRing frame={frame.slug} size={40} rounded="rounded-full">
+                  <span className="text-[0.7rem] font-bold text-text">{frame.name.charAt(0)}</span>
+                </FrameRing>
+                <span className="text-center text-[0.58rem] leading-tight text-muted">
+                  {frame.name}
+                </span>
+                {isActive && <span className="text-[0.55rem] font-semibold text-accent">aktif</span>}
+                {!unlocked && progress && (
+                  <span className="text-center text-[0.5rem] leading-tight text-muted-2">{progress}</span>
+                )}
               </button>
             );
           })}
