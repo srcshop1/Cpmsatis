@@ -44,7 +44,7 @@ const menuItems = [
     title: "Canlı Destek",
     description: "Yetkiliyle anında yazışma",
     icon: <UsersIcon width={19} height={19} />,
-    badge: "Yakında gelecek",
+    badge: "Yakında Gelecek",
   },
 ];
 

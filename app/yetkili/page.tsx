@@ -655,7 +655,7 @@ export default function AdminPage() {
     const notified = await sendNotification(
       ticket.user_id,
       "Talebiniz Kapatıldı; İşte Sonuçlar",
-      note ? `Yetkili mesajı:\n${note}` : "Yetkili mesajı:\nTalebiniz incelendi ve kapatıldı.",
+      note ? `Yetkili Mesajı:\n${note}` : "Yetkili Mesajı:\nTalebiniz incelendi ve kapatıldı.",
       "/diger/destek",
       "support",
     );
@@ -705,10 +705,10 @@ export default function AdminPage() {
 
     const notified = await sendNotification(
       application.user_id,
-      `Başvurunuz Sonuçlandı; ${approve ? "Kabul edildiniz" : "Reddedildiniz"}`,
+      `Başvurunuz Sonuçlandı; ${approve ? "Kabul Edildiniz" : "Reddedildiniz"}`,
       note
-        ? `Yetkili notu:\n${note}`
-        : `Yetkili notu:\nBaşvurunuz ${approve ? "kabul edildi" : "reddedildi"}.`,
+        ? `Yetkili Notu:\n${note}`
+        : `Yetkili Notu:\nBaşvurunuz ${approve ? "kabul edildi" : "reddedildi"}.`,
       "/diger/onayli-satici",
       "application",
     );
@@ -858,8 +858,8 @@ export default function AdminPage() {
       report.reporter_id,
       "Bildiriniz Sonuçlandı; İşte Sonuçlar",
       note
-        ? `Yetkili mesajı:\n${note}`
-        : "Yetkili mesajı:\nBildiriniz incelendi ve kapatıldı.",
+        ? `Yetkili Mesajı:\n${note}`
+        : "Yetkili Mesajı:\nBildiriniz incelendi ve kapatıldı.",
       "/bildirimler",
       "report",
     );
@@ -1363,7 +1363,7 @@ export default function AdminPage() {
     <AppShell>
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">Yetkili paneli</h1>
+          <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">Yetkili Paneli</h1>
           <p className="mt-1 text-xs text-muted-2 sm:text-sm">
             {role === "owner" ? "Kurucu yetkisi" : "Moderatör yetkisi"} · @{user?.username}
           </p>
@@ -2196,7 +2196,7 @@ export default function AdminPage() {
                       }`}
                       title={member.banned ? "Kullanıcı zaten askıda" : "Askıya al"}
                     >
-                      Askıya al
+                      Askıya Al
                     </button>
                     <button
                       type="button"
@@ -2207,7 +2207,7 @@ export default function AdminPage() {
                       }`}
                       title={member.banned ? "Askıyı kaldır" : "Kullanıcı askıda değil"}
                     >
-                      Askıdan kaldır
+                      Askıdan Kaldır
                     </button>
                     {role === "owner" && (
                       <>
@@ -2331,7 +2331,7 @@ export default function AdminPage() {
         {tab === "reviewRemove" && (
           <>
             <div className="card p-4">
-              <h2 className="text-sm font-bold">Değerlendirmeyi kaldır</h2>
+              <h2 className="text-sm font-bold">Değerlendirme Kaldır</h2>
               <p className="mt-1 text-[0.7rem] leading-relaxed text-muted-2">
                 Kullanıcıyı seç, profilindeki değerlendirmelerden kaldırmak istediğine bas.
               </p>
@@ -2438,7 +2438,7 @@ export default function AdminPage() {
 
         {tab === "notify" && (
           <div className="card p-4">
-            <h2 className="text-sm font-bold">Bildirim gönder</h2>
+            <h2 className="text-sm font-bold">Bildirim Gönder</h2>
             <p className="mt-1 text-[0.7rem] text-muted-2">
               Kullanıcı adı veya e-posta yaz, başlık ve mesajı gir. Bildirim kişinin bildirim
               kutusuna düşer.
@@ -2471,7 +2471,7 @@ export default function AdminPage() {
               disabled={busy === "notify"}
               className="btn btn-primary mt-2 h-10 w-full text-sm"
             >
-              {busy === "notify" ? <Spinner /> : <><BellIcon width={14} height={14} /> Bildirim gönder</>}
+              {busy === "notify" ? <Spinner /> : <><BellIcon width={14} height={14} /> Bildirim Gönder</>}
             </button>
             {notifyTarget && (
               <p className="mt-2 text-[0.7rem] text-accent">
@@ -2483,7 +2483,7 @@ export default function AdminPage() {
 
         {tab === "tags" && (
           <div className="card p-4">
-            <h2 className="text-sm font-bold">Rozet ver / al</h2>
+            <h2 className="text-sm font-bold">Rozet Ver / Al</h2>
             <p className="mt-1 text-[0.7rem] text-muted-2">
               Kullanıcı adı veya e-posta yaz, rozeti seç. Rozet profilde ve ilanlarında görünür.
             </p>
@@ -2539,7 +2539,7 @@ export default function AdminPage() {
                 disabled={busy === "tag"}
                 className="btn btn-primary h-10 flex-1 text-sm"
               >
-                {busy === "tag" ? <Spinner /> : "Etiket ver"}
+                {busy === "tag" ? <Spinner /> : "Tag Ver"}
               </button>
               <button
                 type="button"
@@ -2555,7 +2555,7 @@ export default function AdminPage() {
 
         {tab === "roles" && role === "owner" && (
           <div className="card p-4">
-            <h2 className="text-sm font-bold">Moderatör ata</h2>
+            <h2 className="text-sm font-bold">Moderatör Ata</h2>
             <p className="mt-1 text-[0.7rem] text-muted-2">
               Sadece kurucu rol verebilir. Atanan kişi yetkili panelini görebilir.
             </p>
@@ -2583,7 +2583,7 @@ export default function AdminPage() {
               disabled={busy === "role"}
               className="btn btn-primary mt-3 h-10 w-full text-sm"
             >
-              {busy === "role" ? <Spinner /> : "Rolü ver"}
+              {busy === "role" ? <Spinner /> : "Rolü Ver"}
             </button>
           </div>
         )}
@@ -2779,7 +2779,7 @@ export default function AdminPage() {
             ? `@${confirmUser.username} hesabı, ilanları, mesajları ve tüm kayıtları kalıcı olarak silinecek. Bu işlem geri alınamaz.`
             : undefined
         }
-        confirmLabel="Hesabı sil"
+        confirmLabel="Hesabı Sil"
         danger
         busy={Boolean(confirmUser && busy === confirmUser.id)}
         onConfirm={() => {

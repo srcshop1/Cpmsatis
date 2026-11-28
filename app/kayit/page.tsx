@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { AuthPageLoading } from "@/components/auth/auth-page-loading";
 import { RegisterPageClient } from "./register-client";
 
-export const metadata: Metadata = { title: "Kayıt ol" };
+export const metadata: Metadata = { title: "Kayıt Ol" };
 
 export default function RegisterPage() {
   return (

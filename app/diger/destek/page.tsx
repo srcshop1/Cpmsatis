@@ -87,7 +87,7 @@ export default function SupportPage() {
             onClick={() => setStep(2)}
             className="btn btn-primary mt-5 h-11 w-full"
           >
-            Devam et
+            Devam Et
           </button>
         </div>
       )}

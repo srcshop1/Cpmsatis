@@ -298,7 +298,7 @@ export default function HomePage() {
                 Destek
               </Link>
               <Link href="/kayit" className="transition hover:text-text">
-                Kayıt ol
+                Kayıt Ol
               </Link>
             </div>
           </div>

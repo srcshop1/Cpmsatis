@@ -273,7 +273,7 @@ export function MemberDetail({
       <div className="animate-pop relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-line bg-surface p-5 sm:rounded-2xl">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="truncate text-base font-bold">Kullanıcı verileri</h2>
+            <h2 className="truncate text-base font-bold">Kullanıcı Verileri</h2>
             <p className="mt-0.5 truncate text-[0.72rem] text-muted-2">{profile?.email ?? "—"}</p>
           </div>
           <button
@@ -493,7 +493,7 @@ export function MemberDetail({
               disabled={deleting}
               className="w-full rounded-xl border border-danger/40 bg-danger/10 px-3 py-2.5 text-[0.75rem] font-semibold text-[#ffb3bb] hover:bg-danger/20 disabled:opacity-60"
             >
-              Hesabı sil
+              Hesabı Sil
             </button>
           </div>
         )}
@@ -518,7 +518,7 @@ export function MemberDetail({
             ? `@${profile.username} hesabı, ilanları, mesajları ve tüm kayıtları kalıcı olarak silinecek. Bu işlem geri alınamaz.`
             : undefined
         }
-        confirmLabel="Hesabı sil"
+        confirmLabel="Hesabı Sil"
         danger
         busy={deleting}
         onConfirm={() => void deleteAccountNow()}
