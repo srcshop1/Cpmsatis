@@ -55,7 +55,6 @@ export function BanGate({ children }: { children: ReactNode }) {
 
   const { user, until } = ban;
   const daysLeft = until ? Math.max(1, Math.ceil((until - Date.now()) / 86400000)) : null;
-  const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center bg-aurora px-5 py-10">
@@ -109,7 +108,11 @@ export function BanGate({ children }: { children: ReactNode }) {
             <dt className="text-[0.72rem] text-muted-2">Askıya alan</dt>
             <dd className="text-right text-[0.78rem] font-semibold text-[#ffe4e8]">
               {user.banAuthorUsername ? `@${user.banAuthorUsername}` : "Yetkili"}
-              <span className="block text-[0.7rem] font-normal text-muted">yetkili</span>
+              {user.banAuthorUsername && user.banAuthorRole && (
+                <span className="block text-[0.7rem] font-normal text-muted">
+                  {user.banAuthorRole}
+                </span>
+              )}
             </dd>
           </div>
 
@@ -139,13 +142,6 @@ export function BanGate({ children }: { children: ReactNode }) {
             Çıkış yap
           </button>
         </div>
-
-        <a
-          href={`${base}/`}
-          className="mt-4 inline-block text-[0.7rem] text-muted-2 underline underline-offset-2"
-        >
-          CPM Satış
-        </a>
       </div>
     </div>
   );

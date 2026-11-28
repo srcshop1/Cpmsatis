@@ -1025,11 +1025,22 @@ export default function AdminPage() {
         error = retry.error;
       }
 
+      // Fonksiyon eski sürümse "kim askıya aldı" alanını elle yaz
+      if (!error) {
+        const me = (await supabase.auth.getUser()).data.user?.id ?? null;
+        if (banned && me) {
+          await supabase.from("profiles").update({ banned_by: me }).eq("id", userId);
+        } else if (!banned) {
+          await supabase.from("profiles").update({ banned_by: null }).eq("id", userId);
+        }
+      }
+
       // Fonksiyon hiç yoksa doğrudan tabloya yaz (yetkili politikası gerekir)
       if (error) {
+        const me = (await supabase.auth.getUser()).data.user?.id ?? null;
         const direct = await supabase
           .from("profiles")
-          .update({ banned, banned_until: until, ban_reason: reason })
+          .update({ banned, banned_until: until, ban_reason: reason, banned_by: banned ? me : null })
           .eq("id", userId)
           .select("id");
 
