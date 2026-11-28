@@ -28,7 +28,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="relative min-h-screen bg-aurora pb-28">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 py-5">{children}</main>
+      <main key={pathname} className="page-in mx-auto w-full max-w-6xl px-4 py-5">
+        {children}
+      </main>
       <div className="mx-auto w-full max-w-6xl px-4">
         <Disclaimer variant="compact" />
       </div>
