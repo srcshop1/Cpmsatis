@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BottomNav } from "@/components/bottom-nav";
 import { CtaBand } from "@/components/home/cta-band";
+import { Disclaimer } from "@/components/disclaimer";
 import { HomeShowcase } from "@/components/home/showcase";
 import { StaffShowcase } from "@/components/home/staff-showcase";
 import { SiteHeader } from "@/components/site-header";
@@ -269,6 +270,10 @@ export default function HomePage() {
           {/* CTA */}
           <section className="mx-auto w-full max-w-6xl px-4 py-10 pb-16">
             <CtaBand />
+          </section>
+
+          <section className="mx-auto w-full max-w-6xl px-4 pb-12">
+            <Disclaimer />
           </section>
         </main>
 

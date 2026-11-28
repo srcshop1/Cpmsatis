@@ -5,6 +5,7 @@ import { useEffect, type ReactNode } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { AuthPageLoading } from "@/components/auth/auth-page-loading";
 import { BottomNav } from "@/components/bottom-nav";
+import { Disclaimer } from "@/components/disclaimer";
 import { SiteHeader } from "@/components/site-header";
 
 /**
@@ -28,6 +29,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="relative min-h-screen bg-aurora pb-28">
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl px-4 py-5">{children}</main>
+      <div className="mx-auto w-full max-w-6xl px-4">
+        <Disclaimer variant="compact" />
+      </div>
       <BottomNav />
     </div>
   );

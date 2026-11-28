@@ -1,8 +1,12 @@
-import Link from "next/link";
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 export function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/" className="group flex items-center gap-2.5" aria-label="CPM Satış ana sayfa">
+    <a
+      href={`${BASE}/`}
+      className="group flex items-center gap-2.5"
+      aria-label="CPM Satış ana sayfa"
+    >
       <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-accent-soft to-accent-deep text-ink shadow-[0_8px_22px_-10px_rgba(255,138,31,0.9)]">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden>
           <path
@@ -19,6 +23,6 @@ export function Logo({ compact = false }: { compact?: boolean }) {
           CPM<span className="text-accent">Satış</span>
         </span>
       )}
-    </Link>
+    </a>
   );
 }

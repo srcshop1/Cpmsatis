@@ -35,3 +35,14 @@ export async function loadStaffShowcase(supabase: SupabaseClient): Promise<Listi
     rows.map((row) => row.listing_id),
   );
 }
+
+/** Bu hafta vitrinde olan ilanların id'leri (kartlarda çerçeve için) */
+export async function loadShowcaseIds(supabase: SupabaseClient): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("staff_showcase")
+    .select("listing_id")
+    .eq("week_start", currentWeekStart());
+
+  if (error) return [];
+  return ((data ?? []) as { listing_id: string }[]).map((row) => row.listing_id);
+}
