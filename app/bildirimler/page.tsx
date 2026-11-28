@@ -26,6 +26,7 @@ export default function NotificationsPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openItem, setOpenItem] = useState<Notification | null>(null);
 
   useEffect(() => {
     if (!supabase || !user) return;
@@ -266,21 +267,58 @@ export default function NotificationsPage() {
               );
             }
 
-            return item.link ? (
-              <Link key={item.id} href={item.link} onClick={() => markRead(item.id)} className={rowClass}>
-                {content}
-              </Link>
-            ) : (
+            return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => markRead(item.id)}
+                onClick={() => {
+                  void markRead(item.id);
+                  setOpenItem(item);
+                }}
                 className={`${rowClass} w-full`}
               >
                 {content}
               </button>
             );
           })}
+        </div>
+      )}
+
+      {openItem && (
+        <div className="fixed inset-0 z-[130] flex flex-col bg-[#07090d]">
+          <div className="flex items-center justify-between gap-2 border-b border-line/70 px-4 py-3">
+            <span className="text-[0.62rem] font-semibold uppercase tracking-wider text-muted-2">
+              Bildirim · {timeAgo(openItem.created_at)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setOpenItem(null)}
+              className="flex items-center gap-1 rounded-lg border border-line bg-white/8 px-2.5 py-1.5 text-[0.7rem] font-semibold text-text"
+              aria-label="Kapat"
+            >
+              <XIcon width={14} height={14} /> Kapat
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-6">
+            <h2 className="text-xl font-extrabold leading-snug text-text sm:text-2xl">
+              {openItem.title}
+            </h2>
+            {openItem.body && (
+              <p className="mt-4 whitespace-pre-line break-words text-[0.95rem] leading-relaxed text-muted">
+                {openItem.body}
+              </p>
+            )}
+            {openItem.link && (
+              <Link
+                href={openItem.link}
+                onClick={() => setOpenItem(null)}
+                className="btn btn-primary mt-6 h-11 w-full text-sm"
+              >
+                İlgili sayfaya git
+              </Link>
+            )}
+          </div>
         </div>
       )}
 

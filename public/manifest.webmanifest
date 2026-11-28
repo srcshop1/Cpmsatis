@@ -1,7 +1,7 @@
 {
-  "name": "CPM Satış — CPM araç, çizim ve hesap pazarı",
+  "name": "CPM Satış — CPM araç, çizim ve krom pazarı",
   "short_name": "CPM Satış",
-  "description": "CPM araç, çizim ve hesap alım-satımı. İlan ver, satıcıyla mesajlaş.",
+  "description": "CPM araç, çizim ve krom ilanları. İlan ver, satıcıyla mesajlaş.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
