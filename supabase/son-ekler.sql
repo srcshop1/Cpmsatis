@@ -1343,6 +1343,66 @@ alter table public.user_tags
     'vip','premium','verified_seller','trusted','fast','support'
   ));
 
+-- ---------- 5ae) İLAN SÜRESİ UYARISI ----------
+alter table public.listings add column if not exists expiry_notified_at timestamptz;
+
+create or replace function public.notify_expiring_listings()
+returns integer language plpgsql security definer set search_path = public as $$
+declare
+  r record;
+  v_count integer := 0;
+begin
+  for r in
+    select l.id, l.seller_id, l.title
+      from public.listings l
+     where l.status = 'active'
+       and l.created_at <= now() - interval '14 days'
+       and l.created_at > now() - interval '15 days'
+       and l.expiry_notified_at is null
+  loop
+    perform public.notify(
+      r.seller_id,
+      'listing',
+      'İlanının süresi doluyor',
+      r.title || ' ilanının süresi yarın doluyor. Tek dokunuşla yenile.',
+      '/ilan/goruntule?id=' || r.id
+    );
+    update public.listings set expiry_notified_at = now() where id = r.id;
+    v_count := v_count + 1;
+  end loop;
+  return v_count;
+end; $$;
+grant execute on function public.notify_expiring_listings() to authenticated;
+
+-- Yenilenen ilanda uyarı yeniden kurulsun
+create or replace function public.renew_listing(p_listing uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_created timestamptz;
+begin
+  select created_at into v_created
+    from public.listings where id = p_listing and seller_id = auth.uid();
+
+  if v_created is null then
+    raise exception 'Bu ilanın sahibi değilsin';
+  end if;
+  if public.ban_active(auth.uid()) then
+    raise exception 'Hesabın askıda olduğu için ilan yenilenemez';
+  end if;
+  if v_created > now() - interval '14 days' then
+    raise exception 'İlanın süresi dolmadan yenileyemezsin. Son 1 gün kaldığında yenileyebilirsin.';
+  end if;
+
+  update public.listings
+     set created_at = now(),
+         status = 'active',
+         expired_at = null,
+         expiry_notified_at = null,
+         featured_requested = false
+   where id = p_listing;
+end; $$;
+grant execute on function public.renew_listing(uuid) to authenticated;
+
+
 
 
 

@@ -98,6 +98,7 @@ export function ChatClient() {
   const [other, setOther] = useState<ProfileMini | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [listing, setListing] = useState<{ id: string; title: string; price: number; images: string[] | null } | null>(null);
+  const [imageViewer, setImageViewer] = useState<string | null>(null);
   const [clearedAt, setClearedAt] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
   const [draft, setDraft] = useState("");
@@ -562,6 +563,20 @@ export function ChatClient() {
     setReportDone(true);
   }
 
+  useEffect(() => {
+    if (!imageViewer) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setImageViewer(null);
+    };
+    window.addEventListener("keydown", onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [imageViewer]);
+
   return (
     <AppShell>
       <div className="mx-auto flex max-w-3xl flex-col">
@@ -763,7 +778,12 @@ export function ChatClient() {
                   )}
 
                   {ref?.kind === "image" && ref.image ? (
-                    <a href={ref.image} target="_blank" rel="noreferrer" className="block">
+                    <button
+                      type="button"
+                      onClick={() => setImageViewer(ref.image ?? null)}
+                      className="block w-full"
+                      aria-label="Görseli tam ekran aç"
+                    >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={ref.image}
@@ -771,7 +791,7 @@ export function ChatClient() {
                         className="max-h-64 w-full rounded-lg object-cover"
                         loading="lazy"
                       />
-                    </a>
+                    </button>
                   ) : ref?.title ? (
                     <a
                       href={ref.id ? `/ilan/goruntule?id=${ref.id}` : undefined}
@@ -1113,6 +1133,33 @@ export function ChatClient() {
         onConfirm={clearChat}
         onCancel={() => setConfirmClear(false)}
       />
+      {imageViewer && (
+        <div className="fixed inset-0 z-[130] flex flex-col bg-black">
+          <div className="flex items-center justify-end px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setImageViewer(null)}
+              className="flex items-center gap-1 rounded-lg border border-line bg-white/8 px-2.5 py-1.5 text-[0.7rem] font-semibold text-text"
+              aria-label="Geri"
+            >
+              <ChevronLeftIcon width={16} height={16} /> Geri
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setImageViewer(null)}
+            className="flex flex-1 items-center justify-center px-2 pb-6"
+            aria-label="Kapat"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageViewer}
+              alt="Görsel"
+              className="max-h-full max-w-full object-contain"
+            />
+          </button>
+        </div>
+      )}
     </AppShell>
   );
 }
