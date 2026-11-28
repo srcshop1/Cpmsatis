@@ -657,6 +657,88 @@ begin
 end; $$;
 grant execute on function public.request_featured(uuid, integer) to authenticated;
 
+-- ---------- 5ab) ÇERÇEVE SEÇİMİ (sunucu doğrulamalı) ----------
+-- Başarı çerçeveleri yalnızca hak edildiğinde takılabilir.
+create or replace function public.frame_unlocked(p_frame text, p_user uuid default null)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid := coalesce(p_user, auth.uid());
+  v_rating numeric := 0;
+  v_reviews integer := 0;
+  v_sales integer := 0;
+  v_minutes integer;
+  v_days integer := 0;
+  v_listings integer := 0;
+  v_views integer := 0;
+  v_favs integer := 0;
+begin
+  if v_user is null then return false; end if;
+
+  if exists (select 1 from public.user_frames where user_id = v_user and frame = p_frame) then
+    return true;
+  end if;
+
+  if p_frame = 'member' then return true; end if;
+
+  if p_frame = 'verified_seller' then
+    return exists (select 1 from public.profiles where id = v_user and verified_seller)
+        or exists (select 1 from public.user_tags where user_id = v_user and tag = 'verified_seller');
+  end if;
+
+  if p_frame in ('vip', 'premium') then
+    return exists (select 1 from public.user_tags where user_id = v_user and tag = p_frame);
+  end if;
+
+  if p_frame in ('moderator', 'owner') then
+    return exists (select 1 from public.user_roles where user_id = v_user and role = p_frame);
+  end if;
+
+  select coalesce(rating, 0), coalesce(review_count, 0), coalesce(sales_count, 0),
+         greatest(0, extract(day from now() - created_at)::integer)
+    into v_rating, v_reviews, v_sales, v_days
+    from public.profiles where id = v_user;
+
+  select count(*) filter (where status = 'active'),
+         coalesce(sum(view_count), 0),
+         coalesce(sum(favorite_count), 0)
+    into v_listings, v_views, v_favs
+    from public.listings where seller_id = v_user;
+
+  v_minutes := public.seller_response_minutes(v_user);
+
+  return case p_frame
+    when 'ach_first_sale' then v_sales >= 1
+    when 'ach_member_1y' then v_days >= 365
+    when 'ach_sales_10' then v_sales >= 10
+    when 'ach_reviews_10' then v_reviews >= 10
+    when 'ach_listings_10' then v_listings >= 10
+    when 'ach_fast_20' then coalesce(v_minutes, 99999) > 0 and coalesce(v_minutes, 99999) <= 20
+    when 'ach_sales_25' then v_sales >= 25
+    when 'ach_reviews_30_45' then v_reviews >= 30 and v_rating >= 4.5
+    when 'ach_sales_50' then v_sales >= 50
+    when 'ach_views_1000' then v_views >= 1000
+    when 'ach_fast_5' then coalesce(v_minutes, 99999) > 0 and coalesce(v_minutes, 99999) <= 5
+    when 'ach_favorites_100' then v_favs >= 100
+    when 'ach_rating_50' then v_reviews >= 20 and v_rating >= 4.95
+    when 'ach_sales_100' then v_sales >= 100
+    when 'ach_reviews_100' then v_reviews >= 100
+    else false
+  end;
+end; $$;
+grant execute on function public.frame_unlocked(text, uuid) to anon, authenticated;
+
+create or replace function public.set_frame(p_frame text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'Giriş yapmalısın'; end if;
+  if not public.frame_unlocked(p_frame) then
+    raise exception 'Bu çerçeve henüz açılmadı';
+  end if;
+  update public.profiles set equipped_frame = p_frame where id = auth.uid();
+end; $$;
+grant execute on function public.set_frame(text) to authenticated;
+
+
 
 
 

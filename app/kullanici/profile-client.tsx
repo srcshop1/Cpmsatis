@@ -18,6 +18,7 @@ import {
 import { ListingCard } from "@/components/listing-card";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FramedAvatar, StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
+import { sortTags } from "@/lib/badges";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { loadResponseMinutes, responseLabel, type Listing } from "@/lib/listings";
 import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
@@ -301,11 +302,9 @@ export function UserProfileClient() {
             <p className="truncate text-lg font-extrabold">@{profile.username}</p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {profile.verified_seller && <VerifiedBadge small />}
-              {tags
-                .filter((tag) => tag === "vip" || tag === "premium")
-                .map((tag) => (
-                  <TagBadge key={tag} tag={tag} small />
-                ))}
+              {sortTags(tags.filter((tag) => tag === "vip" || tag === "premium")).map((tag) => (
+                <TagBadge key={tag} tag={tag} small />
+              ))}
               {profile.staff_tag && <StaffBadge tag={profile.staff_tag} small />}
             </div>
           </div>

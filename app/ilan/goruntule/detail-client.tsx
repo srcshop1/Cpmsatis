@@ -25,6 +25,7 @@ import {
 } from "@/components/icons";
 import { ListingCard } from "@/components/listing-card";
 import { Price } from "@/components/price";
+import { sortTags } from "@/lib/badges";
 import { formatPriceLabel } from "@/lib/catalog";
 import {
   LISTING_LIFETIME_DAYS,
@@ -682,11 +683,9 @@ export function ListingDetailClient() {
 
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   {seller?.verified_seller && <VerifiedBadge small />}
-                  {sellerTags
-                    .filter((tag) => tag === "vip" || tag === "premium")
-                    .map((tag) => (
-                      <TagBadge key={tag} tag={tag} small />
-                    ))}
+                  {sortTags(sellerTags.filter((tag) => tag === "vip" || tag === "premium")).map((tag) => (
+                    <TagBadge key={tag} tag={tag} small />
+                  ))}
                   {seller?.staff_tag && <StaffBadge tag={seller.staff_tag} small />}
                 </div>
 

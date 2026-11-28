@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
 import { Price } from "@/components/price";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { sortTags } from "@/lib/badges";
 import { deleteAccountAsStaff, deleteReviewAsStaff } from "@/lib/admin";
 import { findFrame } from "@/lib/frames";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -297,11 +298,11 @@ export function MemberDetail({
               <p className="flex flex-wrap items-center gap-1.5 text-sm font-bold">
                 <span className="truncate">@{profile.username}</span>
                 {profile.verified_seller && <VerifiedBadge small />}
-                {detail.tags
-                  .filter((tag) => tag === "vip" || tag === "premium")
-                  .map((tag) => (
+                {sortTags(detail.tags.filter((tag) => tag === "vip" || tag === "premium")).map(
+                  (tag) => (
                     <TagBadge key={tag} tag={tag} small />
-                  ))}
+                  ),
+                )}
                 {profile.staff_tag && <StaffBadge tag={profile.staff_tag} small />}
                 {profile.banned && (
                   <span className="badge border border-danger/40 bg-danger/10 text-[0.55rem] text-danger">

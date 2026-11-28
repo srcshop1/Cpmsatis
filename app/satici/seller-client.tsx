@@ -18,6 +18,7 @@ import {
 } from "@/components/icons";
 import { ListingCard } from "@/components/listing-card";
 import { FramedAvatar, StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
+import { sortTags } from "@/lib/badges";
 import {
   loadExpiredListings,
   loadResponseMinutes,
@@ -237,11 +238,9 @@ export function SellerShowcaseClient() {
               <h1 className="mt-2 flex flex-wrap items-center gap-1.5 text-lg font-extrabold">
                 @{profile.username}
                 {profile.verified_seller && <VerifiedBadge small />}
-                {tags
-                  .filter((tag) => tag === "vip" || tag === "premium")
-                  .map((tag) => (
-                    <TagBadge key={tag} tag={tag} small />
-                  ))}
+                {sortTags(tags.filter((tag) => tag === "vip" || tag === "premium")).map((tag) => (
+                  <TagBadge key={tag} tag={tag} small />
+                ))}
                 {profile.staff_tag && <StaffBadge tag={profile.staff_tag} small />}
               </h1>
 

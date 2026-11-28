@@ -13,3 +13,10 @@ export const BADGES: BadgeDef[] = [
 export function badgeLabel(key: string) {
   return BADGES.find((badge) => badge.key === key)?.label ?? key;
 }
+
+/** Rozet sıralaması: VIP, Premium'dan üstündür */
+const TAG_RANK: Record<string, number> = { vip: 5, premium: 4, verified_seller: 3, trusted: 2, fast: 1, support: 1 };
+
+export function sortTags(tags: string[]) {
+  return [...tags].sort((a, b) => (TAG_RANK[b] ?? 0) - (TAG_RANK[a] ?? 0));
+}
