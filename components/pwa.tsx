@@ -89,7 +89,7 @@ function onInstalledOnce() {
 }
 
 /**
- * Profildeki "Uygulamayı Yükle" butonu.
+ * Profildeki "Uygulamayı yükle" butonu.
  * Kurulum penceresi gelmiyorsa (Safari, masaüstü) nasıl yükleneceğini söyler.
  */
 let deferredPrompt: InstallPrompt | null = null;
@@ -159,7 +159,7 @@ export function InstallAppButton() {
         }}
         className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-accent/40 bg-accent/10 text-[0.72rem] font-semibold text-accent transition hover:bg-accent/15"
       >
-        <PlusIcon width={12} height={12} /> Uygulamayı Yükle
+        <PlusIcon width={12} height={12} /> Uygulamayı yükle
         {ready ? <span className="text-[0.6rem] text-accent/70">hazır</span> : null}
       </button>
       {note && (

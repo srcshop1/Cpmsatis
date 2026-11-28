@@ -23,7 +23,7 @@ export function RegisterPageClient() {
   return (
     <AuthShell
       eyebrow="Ücretsiz hesap"
-      title="Kayıt Ol"
+      title="Kayıt ol"
       subtitle="Dört alan, otuz saniye. Sonrasında her şey elinin altında."
     >
       <DemoBanner />
