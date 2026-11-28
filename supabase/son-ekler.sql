@@ -915,6 +915,64 @@ begin
 end; $$;
 grant execute on function public.delete_my_account() to authenticated;
 
+-- ---------- 5z) İLAN SÜRESİ: YENİLE + OTOMATİK SİLME ----------
+-- 15 günü dolan ilan gizlenir (expired_at damgalanır).
+-- Sahibi 2 gün içinde "Yenile" derse 15 gün daha yayında kalır.
+-- Yenilenmeyen ve satışı olmayan ilanlar 2 gün sonunda silinir.
+alter table public.listings add column if not exists expired_at timestamptz;
+
+update public.listings
+   set expired_at = now() - interval '16 days'
+ where status = 'hidden' and expired_at is null and created_at < now() - interval '15 days';
+
+create or replace function public.expire_listings()
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer;
+begin
+  update public.listings
+     set status = 'hidden',
+         expired_at = coalesce(expired_at, now())
+   where status = 'active'
+     and created_at < now() - interval '15 days';
+  get diagnostics v_count = row_count;
+  return v_count;
+end; $$;
+grant execute on function public.expire_listings() to anon, authenticated;
+
+create or replace function public.renew_listing(p_listing uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (
+    select 1 from public.listings where id = p_listing and seller_id = auth.uid()
+  ) then
+    raise exception 'Bu ilanın sahibi değilsin';
+  end if;
+  if public.ban_active(auth.uid()) then
+    raise exception 'Hesabınız askıda olduğu için ilan yenilenemez';
+  end if;
+
+  update public.listings
+     set created_at = now(),
+         status = 'active',
+         expired_at = null
+   where id = p_listing;
+end; $$;
+grant execute on function public.renew_listing(uuid) to authenticated;
+
+create or replace function public.purge_expired_listings()
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer := 0;
+begin
+  delete from public.listings l
+   where l.expired_at is not null
+     and l.expired_at < now() - interval '2 days'
+     and not exists (select 1 from public.sales s where s.listing_id = l.id);
+  get diagnostics v_count = row_count;
+  return v_count;
+end; $$;
+grant execute on function public.purge_expired_listings() to authenticated;
+
+
 
 -- Satış sayılırken ek sinyal: son 30 günde yeni hesaplardan gelen işlemler
 create or replace function public.settle_sale(p_sale uuid)

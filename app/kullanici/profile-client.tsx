@@ -19,7 +19,7 @@ import { ListingCard } from "@/components/listing-card";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FramedAvatar, StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { Listing } from "@/lib/listings";
+import { loadResponseMinutes, responseLabel, type Listing } from "@/lib/listings";
 import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
 import { deleteReviewAsStaff } from "@/lib/admin";
 import {
@@ -41,11 +41,12 @@ type PublicProfile = {
   verified_seller: boolean | null;
   staff_tag: string | null;
   equipped_frame: string | null;
+  last_seen_at?: string | null;
   created_at: string;
 };
 
 const PROFILE_COLUMNS =
-  "id, username, avatar_url, bio, rating, review_count, sales_count, verified_seller, staff_tag, equipped_frame, created_at";
+  "id, username, avatar_url, bio, rating, review_count, sales_count, verified_seller, staff_tag, equipped_frame, last_seen_at, created_at";
 
 const LISTING_COLUMNS = "id, title, price, category, categories, images, featured_until, created_at, seller_id";
 
@@ -57,6 +58,7 @@ export function UserProfileClient() {
 
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [tags, setTags] = useState<string[]>([]);
+  const [responseMinutes, setResponseMinutes] = useState<number | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [averages, setAverages] = useState<ReviewAverages | null>(null);
@@ -101,7 +103,9 @@ export function UserProfileClient() {
       if (error) {
         const retry = await supabase
           .from("profiles")
-          .select("id, username, avatar_url, rating, review_count, sales_count, verified_seller, created_at")
+          .select(
+            "id, username, avatar_url, rating, review_count, sales_count, verified_seller, created_at",
+          )
           .eq("id", userId)
           .maybeSingle();
         data = retry.data as typeof data;
@@ -126,7 +130,7 @@ export function UserProfileClient() {
         verified_seller: row.verified_seller,
         staff_tag: row.staff_tag,
         equipped_frame: row.equipped_frame,
-        last_seen_at: null,
+        last_seen_at: row.last_seen_at ?? null,
       };
 
       const [{ data: tagRows }, listingResult, reviewRows] = await Promise.all([
@@ -157,6 +161,9 @@ export function UserProfileClient() {
       if (user?.id && user.id !== row.id) {
         setBlocked(await isUserBlocked(supabase, user.id, row.id));
       }
+
+      const minutes = await loadResponseMinutes(supabase, row.id);
+      if (!cancelled) setResponseMinutes(minutes);
     };
 
     void load();
@@ -357,19 +364,80 @@ export function UserProfileClient() {
           </p>
         )}
 
-        <div className="mt-3 flex flex-wrap gap-1.5 text-[0.68rem]">
-          <span className="badge border border-line bg-white/4 text-muted">
-            {profile.sales_count ?? 0} başarılı işlem
-          </span>
-          <span className="badge border border-line bg-white/4 text-muted">
-            {hasRating
-              ? `${Number(profile.rating).toFixed(1)} ★ (${reviewCount})`
-              : "Değerlendirme yok"}
-          </span>
-          <span className="badge border border-line bg-white/4 text-muted">
-            Üyelik: {new Date(profile.created_at).toLocaleDateString("tr-TR")}
-          </span>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-line-soft bg-white/3 p-2.5">
+            <p className="text-[0.6rem] text-muted-2">Satıcı durumu</p>
+            <p
+              className={`mt-0.5 text-[0.78rem] font-bold ${
+                profile.verified_seller ? "text-mint" : "text-muted"
+              }`}
+            >
+              {profile.verified_seller ? "Onaylı satıcı" : "Onay bekliyor"}
+            </p>
+          </div>
+          <div className="rounded-xl border border-line-soft bg-white/3 p-2.5">
+            <p className="text-[0.6rem] text-muted-2">Başarılı işlem</p>
+            <p className="mt-0.5 text-[0.78rem] font-bold">
+              {profile.sales_count ?? 0}
+              <span className="text-[0.6rem] font-normal text-muted-2"> işlem</span>
+            </p>
+          </div>
+          <div className="rounded-xl border border-line-soft bg-white/3 p-2.5">
+            <p className="text-[0.6rem] text-muted-2">Değerlendirme</p>
+            <p className="mt-0.5 text-[0.78rem] font-bold">
+              {hasRating ? (
+                <>
+                  {Number(profile.rating).toFixed(1)}
+                  <span className="text-[0.6rem] font-normal text-muted-2"> /5 · {reviewCount} yorum</span>
+                </>
+              ) : (
+                <span className="text-muted">Henüz yok</span>
+              )}
+            </p>
+          </div>
+          <div className="rounded-xl border border-line-soft bg-white/3 p-2.5">
+            <p className="text-[0.6rem] text-muted-2">Yanıt süresi</p>
+            <p className="mt-0.5 text-[0.78rem] font-bold">
+              {responseMinutes === null ? (
+                <span className="text-muted">Bilinmiyor</span>
+              ) : responseMinutes < 60 ? (
+                <>
+                  {Math.max(1, Math.round(responseMinutes))}
+                  <span className="text-[0.6rem] font-normal text-muted-2"> dk içinde</span>
+                </>
+              ) : responseMinutes < 1440 ? (
+                <>
+                  {Math.round(responseMinutes / 60)}
+                  <span className="text-[0.6rem] font-normal text-muted-2"> saat içinde</span>
+                </>
+              ) : (
+                <>
+                  {Math.round(responseMinutes / 1440)}
+                  <span className="text-[0.6rem] font-normal text-muted-2"> gün içinde</span>
+                </>
+              )}
+            </p>
+          </div>
         </div>
+
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.64rem] text-muted-2">
+          <span>Üyelik: {new Date(profile.created_at).toLocaleDateString("tr-TR")}</span>
+          <span>·</span>
+          <span>
+            {profile.last_seen_at &&
+            new Date(profile.last_seen_at).getTime() > Date.now() - 10 * 60 * 1000
+              ? "şu an aktif"
+              : profile.last_seen_at
+                ? `son görülme ${new Date(profile.last_seen_at).toLocaleDateString("tr-TR")}`
+                : "son görülme bilinmiyor"}
+          </span>
+          {responseLabel(responseMinutes) && (
+            <>
+              <span>·</span>
+              <span>{responseLabel(responseMinutes)}</span>
+            </>
+          )}
+        </p>
       </div>
 
       <section className="mt-4">

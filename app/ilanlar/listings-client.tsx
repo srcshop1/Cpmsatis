@@ -16,7 +16,13 @@ import {
   XIcon,
 } from "@/components/icons";
 import { MAX_LISTING_PRICE, listingCategories } from "@/lib/catalog";
-import { expireListings, fetchListings, touchLastSeen, type Listing } from "@/lib/listings";
+import {
+  expireListings,
+  fetchListings,
+  purgeExpiredListings,
+  touchLastSeen,
+  type Listing,
+} from "@/lib/listings";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Filters = {
@@ -84,6 +90,7 @@ export function ListingsClient() {
     const load = async () => {
       // 15 günü dolan ilanları gizle
       await expireListings(supabase);
+      await purgeExpiredListings(supabase);
 
       const { listings: rows, error } = await fetchListings(supabase, {
         query: (new URLSearchParams(filtersKey).get("q") ?? "").trim(),
