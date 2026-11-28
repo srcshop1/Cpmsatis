@@ -13,16 +13,18 @@ export function BanDialog({
   open: boolean;
   username: string | null;
   busy?: boolean;
-  onConfirm: (days: number | null) => void;
+  onConfirm: (days: number | null, reason: string | null) => void;
   onCancel: () => void;
 }) {
   const [mode, setMode] = useState<"temporary" | "permanent">("temporary");
   const [days, setDays] = useState("7");
+  const [reason, setReason] = useState("");
 
   useEffect(() => {
     if (open) {
       setMode("temporary");
       setDays("7");
+      setReason("");
     }
   }, [open]);
 
@@ -106,6 +108,20 @@ export function BanDialog({
           </div>
         )}
 
+        <div className="mt-3">
+          <label htmlFor="ban-reason" className="mb-1 block text-[0.7rem] text-muted">
+            Sebep (isteğe bağlı)
+          </label>
+          <input
+            id="ban-reason"
+            className="field h-10 text-[0.8rem]"
+            value={reason}
+            maxLength={160}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="ör. sahte ilan, hakaret"
+          />
+        </div>
+
         <div className="mt-4 flex gap-2">
           <button
             type="button"
@@ -117,7 +133,12 @@ export function BanDialog({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(mode === "permanent" ? null : Math.round(numeric))}
+            onClick={() =>
+              onConfirm(
+                mode === "permanent" ? null : Math.round(numeric),
+                reason.trim() ? reason.trim() : null,
+              )
+            }
             disabled={busy || invalid}
             className="btn btn-primary h-10 flex-1 text-sm disabled:opacity-60"
           >

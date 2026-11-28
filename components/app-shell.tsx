@@ -29,6 +29,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="relative min-h-screen bg-aurora pb-28">
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl px-4 py-5">
+        {(() => {
+          const until = user.bannedUntil ? new Date(user.bannedUntil).getTime() : null;
+          const active = Boolean(user.banned) && (until === null || until > Date.now());
+          if (!active) return null;
+          return (
+            <div className="mb-3 rounded-xl border border-danger/40 bg-danger/10 px-3.5 py-2.5 text-[0.76rem] leading-relaxed text-[#ffb3bb]">
+              <strong className="text-[#ffc9cf]">Hesabın askıda.</strong>{" "}
+              {user.banReason ? `Sebep: ${user.banReason}. ` : ""}
+              {until
+                ? `Bitiş: ${new Date(until).toLocaleDateString("tr-TR")} (${Math.max(
+                    1,
+                    Math.ceil((until - Date.now()) / 86400000),
+                  )} gün kaldı).`
+                : "Süresiz."}{" "}
+              İlan açamaz ve mesaj gönderemezsin.
+            </div>
+          );
+        })()}
         {children}
       </main>
       <div className="mx-auto w-full max-w-6xl px-4">
