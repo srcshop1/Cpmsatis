@@ -963,6 +963,7 @@ export default function AdminPage() {
     userId: string,
     action: "ban" | "unban" | "delete" | "demote",
     days: number | null = null,
+    reason: string | null = null,
   ) {
     if (!supabase) return;
     setBusy(userId);
@@ -983,27 +984,57 @@ export default function AdminPage() {
       errorText = error?.message ?? null;
       message = "Yetki kaldırıldı.";
     } else {
-      const { error } = await supabase.rpc("admin_set_banned", {
+      const banned = action === "ban";
+      const until =
+        banned && days && days > 0
+          ? new Date(Date.now() + days * 86400000).toISOString()
+          : null;
+
+      let { error } = await supabase.rpc("admin_set_banned", {
         p_user: userId,
-        p_banned: action === "ban",
-        p_days: action === "ban" ? days : null,
+        p_banned: banned,
+        p_days: banned ? days : null,
+        p_reason: reason,
       });
 
-      // Eski (tek imzalı) fonksiyon varsa süresiz olarak dene
+      // Eski fonksiyon (sebep parametresi yok) varsa onsuz dene
       if (error && /could not find the function|schema cache|does not exist/i.test(error.message)) {
-        const fallback = await supabase.rpc("admin_set_banned", {
+        const retry = await supabase.rpc("admin_set_banned", {
           p_user: userId,
-          p_banned: action === "ban",
+          p_banned: banned,
+          p_days: banned ? days : null,
         });
-        errorText = fallback.error?.message ?? null;
-      } else {
-        errorText = error?.message ?? null;
+        error = retry.error;
+      }
+
+      // Fonksiyon hiç yoksa doğrudan tabloya yaz (yetkili politikası gerekir)
+      if (error) {
+        const direct = await supabase
+          .from("profiles")
+          .update({ banned, banned_until: until, ban_reason: reason })
+          .eq("id", userId)
+          .select("id");
+
+        if (direct.error) {
+          errorText = `${error.message} · ${direct.error.message}`;
+        } else if ((direct.data ?? []).length === 0) {
+          errorText = "Yetki yok: askı işlemi için 5ah SQL bloğunu çalıştır.";
+        } else {
+          errorText = null;
+          if (banned) {
+            await supabase
+              .from("listings")
+              .update({ status: "hidden" })
+              .eq("seller_id", userId)
+              .eq("status", "active");
+          }
+        }
       }
 
       if (!errorText) {
         message =
           action === "unban"
-            ? "Askı kaldırıldı."
+            ? "Askı kaldırıldı. İlanlarını yeniden yayınlayabilir."
             : days && days > 0
               ? `Kullanıcı ${days} gün askıya alındı.`
               : "Kullanıcı kalıcı olarak askıya alındı.";
@@ -2109,13 +2140,25 @@ export default function AdminPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        member.banned ? void adminMember(member.id, "unban") : setBanTarget(member)
-                      }
-                      disabled={busy === member.id}
-                      className="chip px-2 py-1 text-[0.65rem]"
+                      onClick={() => setBanTarget(member)}
+                      disabled={busy === member.id || Boolean(member.banned)}
+                      className={`chip px-2 py-1 text-[0.65rem] ${
+                        member.banned ? "opacity-40" : ""
+                      }`}
+                      title={member.banned ? "Kullanıcı zaten askıda" : "Askıya al"}
                     >
-                      {member.banned ? "Askıyı kaldır" : "Askıya Al"}
+                      Askıya Al
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void adminMember(member.id, "unban")}
+                      disabled={busy === member.id || !member.banned}
+                      className={`chip px-2 py-1 text-[0.65rem] ${
+                        member.banned ? "" : "opacity-40"
+                      }`}
+                      title={member.banned ? "Askıyı kaldır" : "Kullanıcı askıda değil"}
+                    >
+                      Askıdan Kaldır
                     </button>
                     {role === "owner" && (
                       <>
@@ -2671,10 +2714,10 @@ export default function AdminPage() {
         open={Boolean(banTarget)}
         username={banTarget?.username ?? null}
         busy={Boolean(banTarget && busy === banTarget.id)}
-        onConfirm={(days) => {
+        onConfirm={(days, reason) => {
           const target = banTarget;
           setBanTarget(null);
-          if (target) void adminMember(target.id, "ban", days);
+          if (target) void adminMember(target.id, "ban", days, reason);
         }}
         onCancel={() => setBanTarget(null)}
       />

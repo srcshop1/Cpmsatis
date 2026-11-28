@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let { data, error } = await supabase
         .from("profiles")
         .select(
-          "username, avatar_url, rating, sales_count, review_count, verified_seller, equipped_frame, staff_tag",
+          "username, avatar_url, rating, sales_count, review_count, verified_seller, equipped_frame, staff_tag, banned, banned_until, ban_reason",
         )
         .eq("id", authUser.id)
         .maybeSingle();
@@ -112,6 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verifiedSeller: data.verified_seller,
         frame: data.equipped_frame,
         staffTag: data.staff_tag,
+        banned: (data as { banned?: boolean | null }).banned ?? null,
+        bannedUntil: (data as { banned_until?: string | null }).banned_until ?? null,
+        banReason: (data as { ban_reason?: string | null }).ban_reason ?? null,
         createdAt: authUser.created_at,
       };
     },

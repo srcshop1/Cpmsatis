@@ -2863,3 +2863,105 @@ end; $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
 for each row execute function public.handle_new_user();
+
+
+-- ---------- 5ah) ASKIYA ALMA (SAĞLAM SÜRÜM) ----------
+-- Kolonlar
+alter table public.profiles add column if not exists banned boolean not null default false;
+alter table public.profiles add column if not exists banned_until timestamptz;
+alter table public.profiles add column if not exists ban_reason text;
+
+-- Askı gerçekten etkin mi?
+create or replace function public.ban_active(p_user uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((
+    select p.banned and (p.banned_until is null or p.banned_until > now())
+      from public.profiles p where p.id = p_user
+  ), false);
+$$;
+grant execute on function public.ban_active(uuid) to anon, authenticated;
+
+-- Süresi dolanları temizle
+create or replace function public.expire_bans()
+returns integer language plpgsql security definer set search_path = public as $$
+declare v_count integer := 0;
+begin
+  update public.profiles
+     set banned = false, banned_until = null, ban_reason = null
+   where banned and banned_until is not null and banned_until <= now();
+  get diagnostics v_count = row_count;
+  return v_count;
+end; $$;
+grant execute on function public.expire_bans() to authenticated;
+
+-- Eski imzaları temizle (parametre karmaşasını önler)
+drop function if exists public.admin_set_banned(uuid, boolean);
+drop function if exists public.admin_set_banned(uuid, boolean, integer);
+
+create or replace function public.admin_set_banned(
+  p_user uuid,
+  p_banned boolean,
+  p_days integer default null,
+  p_reason text default null
+) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_staff() then raise exception 'Yetkisiz'; end if;
+  if p_user = auth.uid() then raise exception 'Kendini askıya alamazsın'; end if;
+  if (select role from public.user_roles where user_id = p_user) = 'owner' then
+    raise exception 'Kurucu askıya alınamaz';
+  end if;
+  if not exists (select 1 from public.profiles where id = p_user) then
+    raise exception 'Kullanıcı bulunamadı';
+  end if;
+
+  if p_banned then
+    update public.profiles
+       set banned = true,
+           banned_until = case
+             when p_days is null or p_days <= 0 then null
+             else now() + make_interval(days => least(greatest(p_days, 1), 3650))
+           end,
+           ban_reason = nullif(trim(coalesce(p_reason, '')), '')
+     where id = p_user;
+
+    update public.listings set status = 'hidden'
+     where seller_id = p_user and status = 'active';
+  else
+    update public.profiles
+       set banned = false, banned_until = null, ban_reason = null
+     where id = p_user;
+  end if;
+end; $$;
+grant execute on function public.admin_set_banned(uuid, boolean, integer, text) to authenticated;
+
+-- Yetkilinin profili doğrudan güncelleyebilmesi (fonksiyon yoksa yedek yol)
+drop policy if exists "Yetkili profilleri günceller" on public.profiles;
+create policy "Yetkili profilleri günceller" on public.profiles for update
+  using (public.is_staff()) with check (public.is_staff());
+
+-- Askıdaki kullanıcı ilan ve mesaj gönderemez (veritabanı seviyesinde)
+create or replace function public.guard_banned_listing()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.ban_active(new.seller_id) then
+    raise exception 'Hesabın askıda olduğu için ilan ekleyemezsin';
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists listings_ban_guard on public.listings;
+create trigger listings_ban_guard before insert on public.listings
+for each row execute function public.guard_banned_listing();
+
+create or replace function public.guard_banned_message()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.ban_active(new.sender_id) then
+    raise exception 'Hesabın askıda olduğu için mesaj gönderemezsin';
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists messages_ban_guard on public.messages;
+create trigger messages_ban_guard before insert on public.messages
+for each row execute function public.guard_banned_message();

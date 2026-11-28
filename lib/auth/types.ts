@@ -9,6 +9,9 @@ export type AppUser = {
   verifiedSeller?: boolean | null;
   staffTag?: string | null;
   frame?: string | null;
+  banned?: boolean | null;
+  bannedUntil?: string | null;
+  banReason?: string | null;
   createdAt?: string;
 };
 
