@@ -64,6 +64,7 @@ export default function ProfilePage() {
   const [tags, setTags] = useState<string[]>([]);
   const [grantedFrames, setGrantedFrames] = useState<string[]>([]);
   const [frameStats, setFrameStats] = useState<FrameStats>(emptyFrameStats);
+  const [frameCat, setFrameCat] = useState<"tag" | "achievement">("tag");
   const [role, setRole] = useState<string | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [averages, setAverages] = useState<ReviewAverages | null>(null);
@@ -655,98 +656,139 @@ export default function ProfilePage() {
       <section className="mt-4 card p-5">
         <h2 className="text-sm font-bold">Çerçeveler</h2>
         <p className="mt-1 text-[0.7rem] text-muted-2">
-          Beğendiğin çerçeveyi seç. Kilitli çerçeveler hedeflerine ulaşınca açılır.
+          Beğendiğin çerçeveyi seç. Kilitli çerçeveler hedefine ulaşınca açılır.
         </p>
 
-        {/* TAG ÇERÇEVELERİ */}
-        <h3 className="mt-4 flex items-center gap-1.5 text-[0.72rem] font-bold text-muted">
-          <ShieldIcon width={13} height={13} className="text-accent" /> Tag Çerçeveleri
-        </h3>
-        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {tagFrames.map((frame) => {
-            const unlocked = owned.has(frame.needs) || frame.needs === "member";
-            const isActive = (user.frame ?? "member") === frame.slug;
-            return (
-              <button
-                key={frame.slug}
-                type="button"
-                disabled={frameBusy === frame.slug}
-                onClick={() => {
-                  if (!unlocked) {
-                    setNotice(`Bu çerçeve kilitli. ${frame.hint}.`);
-                    return;
-                  }
-                  void equipFrame(frame.slug);
-                }}
-                className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
-                  isActive
-                    ? "border-accent/60 bg-accent/10"
-                    : unlocked
-                      ? "border-line-soft bg-white/3 hover:border-line"
-                      : "border-line-soft bg-white/2 opacity-45"
-                }`}
-                title={unlocked ? `${frame.name} çerçevesini seç` : frame.hint}
-              >
-                <FrameRing frame={frame.slug} size={40} rounded="rounded-full">
-                  <span className="text-[0.7rem] font-bold text-text">{frame.name.charAt(0)}</span>
-                </FrameRing>
-                <span className="text-center text-[0.6rem] leading-tight text-muted">
-                  {frame.name}
-                </span>
-                {isActive && <span className="text-[0.55rem] font-semibold text-accent">aktif</span>}
-                {!unlocked && <span className="text-[0.55rem] text-muted-2">kilitli</span>}
-              </button>
-            );
-          })}
+        <div className="mt-3 grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={() => setFrameCat("tag")}
+            className={`flex h-9 items-center justify-center gap-1.5 rounded-xl border text-[0.72rem] font-semibold transition ${
+              frameCat === "tag"
+                ? "border-accent/50 bg-accent/12 text-accent"
+                : "border-line bg-white/4 text-muted"
+            }`}
+          >
+            <ShieldIcon width={13} height={13} /> Tag Çerçeveleri
+          </button>
+          <button
+            type="button"
+            onClick={() => setFrameCat("achievement")}
+            className={`flex h-9 items-center justify-center gap-1.5 rounded-xl border text-[0.72rem] font-semibold transition ${
+              frameCat === "achievement"
+                ? "border-accent/50 bg-accent/12 text-accent"
+                : "border-line bg-white/4 text-muted"
+            }`}
+          >
+            <StarIcon width={13} height={13} /> Başarı Çerçeveleri
+          </button>
         </div>
 
-        {/* BAŞARI ÇERÇEVELERİ */}
-        <h3 className="mt-5 flex items-center gap-1.5 text-[0.72rem] font-bold text-muted">
-          <StarIcon width={13} height={13} className="text-accent" /> Başarı Çerçeveleri
-        </h3>
-        <p className="mt-1 text-[0.65rem] text-muted-2">
-          Başarıların arttıkça açılır. Kilitli olanlarda hedefin ne kadar kaldığını görürsün.
-        </p>
-        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {achievementFrames.map((frame) => {
-            const unlocked = isFrameUnlocked(frame, frameStats);
-            const isActive = (user.frame ?? "member") === frame.slug;
-            const progress = unlocked ? null : frameProgress(frame, frameStats);
-            return (
-              <button
-                key={frame.slug}
-                type="button"
-                disabled={frameBusy === frame.slug}
-                onClick={() => {
-                  if (!unlocked) {
-                    setNotice(`Bu çerçeve kilitli. ${frame.hint}.`);
-                    return;
-                  }
-                  void equipFrame(frame.slug);
-                }}
-                className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
-                  isActive
-                    ? "border-accent/60 bg-accent/10"
-                    : unlocked
-                      ? "border-line-soft bg-white/3 hover:border-line"
-                      : "border-line-soft bg-white/2 opacity-55"
-                }`}
-                title={unlocked ? `${frame.name} çerçevesini seç` : frame.hint}
-              >
-                <FrameRing frame={frame.slug} size={40} rounded="rounded-full">
-                  <span className="text-[0.7rem] font-bold text-text">{frame.name.charAt(0)}</span>
-                </FrameRing>
-                <span className="text-center text-[0.58rem] leading-tight text-muted">
-                  {frame.name}
-                </span>
-                {isActive && <span className="text-[0.55rem] font-semibold text-accent">aktif</span>}
-                {!unlocked && progress && (
-                  <span className="text-center text-[0.5rem] leading-tight text-muted-2">{progress}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {frameCat === "tag" ? (
+          <>
+            <p className="mt-2 text-[0.62rem] text-muted-2">
+              Rozet ve yetkilere bağlı çerçeveler. En üstün olanlar VIP, Moderatör ve Kurucu.
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {tagFrames.map((frame) => {
+                const unlocked = owned.has(frame.needs) || frame.needs === "member";
+                const isActive = (user.frame ?? "member") === frame.slug;
+                return (
+                  <button
+                    key={frame.slug}
+                    type="button"
+                    disabled={frameBusy === frame.slug}
+                    onClick={() => {
+                      if (!unlocked) {
+                        setNotice(`Bu çerçeve kilitli. ${frame.hint}.`);
+                        return;
+                      }
+                      void equipFrame(frame.slug);
+                    }}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
+                      isActive
+                        ? "border-accent/60 bg-accent/10"
+                        : unlocked
+                          ? "border-line-soft bg-white/3 hover:border-line"
+                          : "border-line-soft bg-white/2 opacity-45"
+                    }`}
+                    title={unlocked ? `${frame.name} çerçevesini seç` : frame.hint}
+                  >
+                    <FrameRing frame={frame.slug} size={40} rounded="rounded-full">
+                      <span className="text-[0.7rem] font-bold text-text">
+                        {frame.name.charAt(0)}
+                      </span>
+                    </FrameRing>
+                    <span className="text-center text-[0.6rem] leading-tight text-muted">
+                      {frame.name}
+                    </span>
+                    <span className="text-center text-[0.5rem] leading-tight text-muted-2">
+                      {frame.hint}
+                    </span>
+                    {isActive && (
+                      <span className="text-[0.55rem] font-semibold text-accent">aktif</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="mt-2 text-[0.62rem] text-muted-2">
+              Başarılarınla açılır. Kilitli olanlarda hedefine ne kadar kaldığı yazar.
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {achievementFrames.map((frame) => {
+                const unlocked = isFrameUnlocked(frame, frameStats);
+                const isActive = (user.frame ?? "member") === frame.slug;
+                const progress = unlocked ? null : frameProgress(frame, frameStats);
+                return (
+                  <button
+                    key={frame.slug}
+                    type="button"
+                    disabled={frameBusy === frame.slug}
+                    onClick={() => {
+                      if (!unlocked) {
+                        setNotice(`Bu çerçeve kilitli. ${frame.hint}.`);
+                        return;
+                      }
+                      void equipFrame(frame.slug);
+                    }}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
+                      isActive
+                        ? "border-accent/60 bg-accent/10"
+                        : unlocked
+                          ? "border-line-soft bg-white/3 hover:border-line"
+                          : "border-line-soft bg-white/2 opacity-60"
+                    }`}
+                    title={unlocked ? `${frame.name} çerçevesini seç` : frame.hint}
+                  >
+                    <FrameRing frame={frame.slug} size={40} rounded="rounded-full">
+                      <span className="text-[0.7rem] font-bold text-text">
+                        {frame.name.charAt(0)}
+                      </span>
+                    </FrameRing>
+                    <span className="text-center text-[0.58rem] leading-tight text-muted">
+                      {frame.name}
+                    </span>
+                    <span className="text-center text-[0.5rem] leading-tight text-muted-2">
+                      {frame.hint}
+                    </span>
+                    {isActive && (
+                      <span className="text-[0.55rem] font-semibold text-accent">aktif</span>
+                    )}
+                    {!unlocked && progress && (
+                      <span className="text-center text-[0.5rem] leading-tight text-[#ffb057]">
+                        {progress}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
       </section>
 
       <button

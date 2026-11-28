@@ -1197,6 +1197,110 @@ begin
 end; $$;
 grant execute on function public.set_frame(text) to authenticated;
 
+-- ---------- 5ac) ÇERÇEVE KURALLARI (güncel) ----------
+create or replace function public.frame_unlocked(p_frame text, p_user uuid default null)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid := coalesce(p_user, auth.uid());
+  v_rating numeric := 0;
+  v_reviews integer := 0;
+  v_sales integer := 0;
+  v_minutes integer;
+  v_days integer := 0;
+  v_listings integer := 0;
+  v_views integer := 0;
+  v_favs integer := 0;
+begin
+  if v_user is null then return false; end if;
+
+  if exists (select 1 from public.user_frames where user_id = v_user and frame = p_frame) then
+    return true;
+  end if;
+
+  if p_frame = 'member' then return true; end if;
+
+  if p_frame = 'verified_seller' then
+    return exists (select 1 from public.profiles where id = v_user and verified_seller)
+        or exists (select 1 from public.user_tags where user_id = v_user and tag = 'verified_seller');
+  end if;
+
+  if p_frame in ('vip', 'premium') then
+    return exists (select 1 from public.user_tags where user_id = v_user and tag = p_frame);
+  end if;
+
+  if p_frame in ('moderator', 'owner') then
+    return exists (select 1 from public.user_roles where user_id = v_user and role = p_frame);
+  end if;
+
+  select coalesce(rating, 0), coalesce(review_count, 0), coalesce(sales_count, 0),
+         greatest(0, extract(day from now() - created_at)::integer)
+    into v_rating, v_reviews, v_sales, v_days
+    from public.profiles where id = v_user;
+
+  select count(*) filter (where status = 'active'),
+         coalesce(sum(view_count), 0),
+         coalesce(sum(favorite_count), 0)
+    into v_listings, v_views, v_favs
+    from public.listings where seller_id = v_user;
+
+  v_minutes := public.seller_response_minutes(v_user);
+
+  return case p_frame
+    when 'ach_first_sale' then v_sales >= 1
+    when 'ach_member_1y' then v_days >= 365
+    when 'ach_sales_10' then v_sales >= 10
+    when 'ach_rating_40' then v_reviews >= 10 and v_rating >= 4.0
+    when 'ach_listings_10' then v_listings >= 10
+    when 'ach_fast_20' then coalesce(v_minutes, 99999) > 0 and coalesce(v_minutes, 99999) <= 20
+    when 'ach_sales_25' then v_sales >= 25
+    when 'ach_rating_45' then v_reviews >= 30 and v_rating >= 4.5
+    when 'ach_sales_50' then v_sales >= 50
+    when 'ach_views_1000' then v_views >= 1000
+    when 'ach_fast_5' then coalesce(v_minutes, 99999) > 0 and coalesce(v_minutes, 99999) <= 5
+    when 'ach_favorites_100' then v_favs >= 100
+    when 'ach_rating_48' then v_reviews >= 60 and v_rating >= 4.8
+    when 'ach_rating_50' then v_reviews >= 20 and v_rating >= 4.95
+    when 'ach_sales_100' then v_sales >= 100
+    when 'ach_rating_100' then v_reviews >= 100 and v_rating >= 4.5
+    else false
+  end;
+end; $$;
+grant execute on function public.frame_unlocked(text, uuid) to anon, authenticated;
+
+-- Çerçeve verme/alma yalnızca kurucuda
+create or replace function public.admin_set_frame(
+  p_user uuid,
+  p_frame text,
+  p_remove boolean default false
+) returns void language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_staff_role() is distinct from 'owner' then
+    raise exception 'Çerçeve verme/alma yalnızca kurucuya açık';
+  end if;
+
+  if p_frame not in (
+    'member','verified_seller','vip','premium','moderator','owner',
+    'ach_first_sale','ach_member_1y','ach_sales_10','ach_rating_40','ach_listings_10',
+    'ach_fast_20','ach_sales_25','ach_rating_45','ach_sales_50','ach_views_1000',
+    'ach_fast_5','ach_favorites_100','ach_rating_48','ach_rating_50','ach_sales_100',
+    'ach_rating_100'
+  ) then
+    raise exception 'Geçersiz çerçeve';
+  end if;
+
+  if p_remove then
+    delete from public.user_frames where user_id = p_user and frame = p_frame;
+    update public.profiles set equipped_frame = 'member'
+     where id = p_user and equipped_frame = p_frame;
+  else
+    insert into public.user_frames (user_id, frame, granted_by)
+    values (p_user, p_frame, auth.uid())
+    on conflict (user_id, frame) do nothing;
+  end if;
+end; $$;
+grant execute on function public.admin_set_frame(uuid, text, boolean) to authenticated;
+
+
 
 
 
