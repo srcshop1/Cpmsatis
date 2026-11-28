@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { BellIcon, HeartIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { Logo } from "@/components/logo";
-import { SideMenu } from "@/components/side-menu";
 import { AnnouncementBar } from "@/components/announcement-bar";
 import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -154,7 +153,6 @@ export function SiteHeader() {
             </>
           )}
 
-          <SideMenu />
         </div>
       </div>
     </header>
