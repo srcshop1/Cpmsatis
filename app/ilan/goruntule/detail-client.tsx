@@ -798,7 +798,7 @@ export function ListingDetailClient() {
             <h2 className="text-sm font-bold">Açıklama</h2>
             {listing.description_html ? (
               <div
-                className="mt-2 text-[0.85rem] leading-relaxed text-muted [&_b]:text-text [&_strong]:text-text"
+                className="selectable mt-2 text-[0.85rem] leading-relaxed text-muted [&_b]:text-text [&_strong]:text-text"
                 dangerouslySetInnerHTML={{ __html: sanitizeHtml(listing.description_html) }}
               />
             ) : (
