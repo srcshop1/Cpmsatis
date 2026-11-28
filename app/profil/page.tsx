@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { FramedAvatar } from "@/components/user-badge";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
   CheckIcon,
@@ -240,7 +241,12 @@ export default function ProfilePage() {
 
     setFrameBusy(null);
     if (error) {
-      setNotice("Çerçeve seçilemedi.");
+      console.error("[cerceve-sec]", error.message);
+      setNotice(
+        /[çğıöşüÇĞİÖŞÜ]/.test(error.message)
+          ? error.message
+          : "Çerçeve seçilemedi. Sayfayı yenileyip tekrar dene.",
+      );
       return;
     }
     await refreshUser();
@@ -497,6 +503,13 @@ export default function ProfilePage() {
           {reviews.slice(0, 5).map((review) => (
             <div key={review.id} className="rounded-xl border border-line-soft bg-white/3 p-3">
               <div className="flex items-center gap-2">
+                <FramedAvatar
+                  src={review.reviewer?.avatar_url}
+                  username={review.reviewer?.username}
+                  frame={review.reviewer?.equipped_frame}
+                  size={26}
+                  rounded="rounded-full"
+                />
                 <span className="text-[0.75rem] font-semibold">
                   @{review.reviewer?.username ?? "alıcı"}
                 </span>

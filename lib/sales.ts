@@ -38,7 +38,7 @@ export type Review = {
   status?: string | null;
   flag_reason?: string | null;
   created_at: string;
-  reviewer?: { username: string; avatar_url: string | null } | null;
+  reviewer?: { username: string; avatar_url: string | null; equipped_frame?: string | null } | null;
 };
 
 export type ReviewAverages = {
@@ -194,10 +194,15 @@ export async function loadReviews(
   const buyerIds = Array.from(new Set(reviews.map((review) => review.buyer_id)));
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, username, avatar_url")
+    .select("id, username, avatar_url, equipped_frame")
     .in("id", buyerIds);
   const map = new Map(
-    ((profiles ?? []) as { id: string; username: string; avatar_url: string | null }[]).map(
+    ((profiles ?? []) as {
+      id: string;
+      username: string;
+      avatar_url: string | null;
+      equipped_frame: string | null;
+    }[]).map(
       (profile) => [profile.id, profile],
     ),
   );

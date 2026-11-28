@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { FramedAvatar } from "@/components/user-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useAuth } from "@/components/auth/auth-provider";
 import { CheckIcon, MessageIcon, PlusIcon, TrashIcon } from "@/components/icons";
@@ -195,14 +196,13 @@ export default function MessagesPage() {
             return (
               <div key={conversation.id} className="card flex items-center gap-3 p-3">
                 <Link href={`/mesajlar/sohbet?id=${conversation.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-accent-soft to-accent-deep text-sm font-extrabold text-ink">
-                    {other?.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={other.avatar_url} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      (other?.username ?? "?").charAt(0).toUpperCase()
-                    )}
-                  </span>
+                  <FramedAvatar
+                    src={other?.avatar_url}
+                    username={other?.username}
+                    frame={other?.equipped_frame}
+                    size={44}
+                    rounded="rounded-full"
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
                       <span className="truncate text-sm font-semibold">
