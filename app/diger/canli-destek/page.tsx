@@ -26,7 +26,7 @@ export default function LiveSupportPage() {
           </p>
         </div>
         <span className="badge border border-line bg-white/4 text-[0.7rem] text-muted">
-          <ClockIcon width={13} height={13} /> Yakında gelecek
+          <ClockIcon width={13} height={13} /> Yakında Gelecek
         </span>
         <Link href="/diger/destek" className="btn btn-primary h-10 px-5 text-sm">
           Destek Talebi Oluştur

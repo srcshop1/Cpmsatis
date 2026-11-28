@@ -1023,7 +1023,7 @@ export function ListingDetailClient() {
                 disabled={featuredBusy}
                 className="btn btn-primary h-10 flex-1 text-sm"
               >
-                {featuredBusy ? "…" : "Talep gönder"}
+                {featuredBusy ? "…" : "Talep Gönder"}
               </button>
             </div>
           </div>

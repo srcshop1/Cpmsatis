@@ -225,7 +225,7 @@ export default function OrdersPage() {
                     disabled={busyId === sale.id}
                     className="btn btn-primary h-9 flex-1 text-xs"
                   >
-                    {busyId === sale.id ? <Spinner /> : <><CheckIcon width={14} height={14} /> Siparişi onayla</>}
+                    {busyId === sale.id ? <Spinner /> : <><CheckIcon width={14} height={14} /> Siparişi Onayla</>}
                   </button>
                   <Link href="/diger/destek" className="btn btn-ghost h-9 flex-1 text-xs">
                     Sorun var
@@ -332,7 +332,7 @@ export default function OrdersPage() {
               disabled={busyId === reviewSale.id}
               className="btn btn-primary mt-3 h-11 w-full"
             >
-              {busyId === reviewSale.id ? <Spinner /> : "Değerlendirmeyi gönder"}
+              {busyId === reviewSale.id ? <Spinner /> : "Değerlendirmeyi Gönder"}
             </button>
           </div>
         </div>

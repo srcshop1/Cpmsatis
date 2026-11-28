@@ -582,7 +582,7 @@ export default function ProfilePage() {
       {/* Kullanıcı adı */}
       <section className="mt-4 card p-5">
         <h2 className="flex items-center gap-2 text-sm font-bold">
-          <UserIcon width={16} height={16} className="text-accent" /> Kullanıcı adı
+          <UserIcon width={16} height={16} className="text-accent" /> Kullanıcı Adı
         </h2>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input
@@ -660,7 +660,7 @@ export default function ProfilePage() {
         <div className="mt-3 flex items-center gap-2">
           <input className="field" value={user.email} disabled />
           <span className="badge shrink-0 border border-line bg-white/5 text-[0.6rem] text-muted-2">
-            <ClockIcon width={11} height={11} /> Yakında gelecek
+            <ClockIcon width={11} height={11} /> Yakında Gelecek
           </span>
         </div>
       </section>
@@ -814,7 +814,7 @@ export default function ProfilePage() {
         onClick={handleSignOut}
         className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-line bg-white/4 text-sm font-semibold text-text transition hover:border-accent/50 hover:text-accent"
       >
-        <LogoutIcon width={16} height={16} /> Çıkış yap
+        <LogoutIcon width={16} height={16} /> Çıkış Yap
       </button>
 
       <button

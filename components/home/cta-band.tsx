@@ -27,10 +27,10 @@ export function CtaBand() {
           ) : (
             <>
               <Link href="/kayit" className="btn btn-primary h-11 px-6">
-                Ücretsiz Kayıt ol
+                Ücretsiz Kayıt Ol
               </Link>
               <Link href="/giris" className="btn btn-ghost h-11 px-6">
-                Giriş yap
+                Giriş Yap
               </Link>
             </>
           )}

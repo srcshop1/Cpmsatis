@@ -111,7 +111,7 @@ export function ProfileEditor() {
   return (
     <div className="space-y-3">
       <div className="card p-4">
-        <h2 className="text-sm font-bold">Profili düzenle</h2>
+        <h2 className="text-sm font-bold">Profil Düzenle</h2>
         <p className="mt-1 text-[0.7rem] leading-relaxed text-muted-2">
           Kullanıcıyı seç; başarılı işlem sayısını düzenle, ilanlarını ve değerlendirmelerini kaldır.
         </p>
