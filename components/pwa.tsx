@@ -21,29 +21,89 @@ export function useServiceWorker() {
   }, []);
 }
 
-/** Layout'a konur: service worker'ı kaydeder. */
+/** Uygulama zaten yüklüyse (ana ekrandan açılmışsa) true */
+function isStandalone() {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+const AUTO_KEY = "cpm-install-auto";
+const AUTO_COOLDOWN = 2 * 24 * 60 * 60 * 1000; // 2 günde bir dener
+
+/** Kurulum penceresini ilk dokunuşta kendiliğinden açar. */
+function armAutoInstall() {
+  if (typeof window === "undefined" || !deferredPrompt) return;
+  try {
+    const last = Number(window.localStorage.getItem(AUTO_KEY) || 0);
+    if (last && Date.now() - last < AUTO_COOLDOWN) return;
+    window.localStorage.setItem(AUTO_KEY, String(Date.now()));
+  } catch {
+    // localStorage kapalıysa yine de dene
+  }
+
+  const fire = async () => {
+    document.removeEventListener("pointerdown", fire);
+    document.removeEventListener("keydown", fire);
+    const prompt = deferredPrompt;
+    if (!prompt) return;
+    try {
+      await prompt.prompt();
+      await prompt.userChoice;
+    } catch {
+      // yoksay
+    }
+    deferredPrompt = null;
+    promptListeners.forEach((listener) => listener());
+  };
+
+  document.addEventListener("pointerdown", fire, { passive: true });
+  document.addEventListener("keydown", fire);
+}
+
+/** Site açılınca kurulum iznini yakalar ve ilk dokunuşta kendiliğinden sorar. */
 export function PwaSetup() {
   useServiceWorker();
+
+  useEffect(() => {
+    if (isStandalone()) return;
+    const ready = () => {
+      if (deferredPrompt) armAutoInstall();
+    };
+    ready();
+    promptListeners.add(ready);
+    window.addEventListener("appinstalled", onInstalledOnce);
+    return () => {
+      promptListeners.delete(ready);
+      window.removeEventListener("appinstalled", onInstalledOnce);
+    };
+  }, []);
+
   return null;
+}
+
+function onInstalledOnce() {
+  deferredPrompt = null;
 }
 
 /**
  * Profildeki "Uygulamayı Yükle" butonu.
- * Kurulabiliyorsa tarayıcının kurulum penceresini açar; kurulum penceresi
- * gelmiyorsa (Safari, masaüstü vb.) nasıl yükleneceğini kısa bir notla söyler.
+ * Kurulum penceresi gelmiyorsa (Safari, masaüstü) nasıl yükleneceğini söyler.
  */
 let deferredPrompt: InstallPrompt | null = null;
-const promptListeners = new Set<(prompt: InstallPrompt | null) => void>();
+const promptListeners = new Set<() => void>();
 
 if (typeof window !== "undefined") {
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     deferredPrompt = event as InstallPrompt;
-    promptListeners.forEach((listener) => listener(deferredPrompt));
+    promptListeners.forEach((listener) => listener());
   });
   window.addEventListener("appinstalled", () => {
     deferredPrompt = null;
-    promptListeners.forEach((listener) => listener(null));
+    promptListeners.forEach((listener) => listener());
   });
 }
 
@@ -54,15 +114,12 @@ export function InstallAppButton() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
-    if (standalone) {
+    if (isStandalone()) {
       setInstalled(true);
       return;
     }
 
-    const listener = (prompt: InstallPrompt | null) => setReady(Boolean(prompt));
+    const listener = () => setReady(Boolean(deferredPrompt));
     promptListeners.add(listener);
     setReady(Boolean(deferredPrompt));
 
