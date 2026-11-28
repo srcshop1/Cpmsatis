@@ -11,6 +11,7 @@ import {
   StarIcon,
   XIcon,
 } from "@/components/icons";
+import { MoneyIcon } from "@/components/price";
 import {
   MAX_LISTING_IMAGES,
   MAX_LISTING_PRICE,
@@ -98,7 +99,7 @@ export default function CreateListingPage() {
       return;
     }
     if (numericPrice > MAX_LISTING_PRICE) {
-      setError(`Fiyat en fazla ${MAX_LISTING_PRICE.toLocaleString("tr-TR")} TL olabilir.`);
+      setError(`Fiyat en fazla ${MAX_LISTING_PRICE.toLocaleString("tr-TR")} CPM olabilir.`);
       return;
     }
     const safeTitle = censorProfanity(cleanTitle);
@@ -326,21 +327,29 @@ export default function CreateListingPage() {
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="listing-price" className="mb-1.5 block text-xs text-muted">
-                Fiyat (TL)
+                Fiyat
               </label>
-              <input
-                id="listing-price"
-                className="field"
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={MAX_LISTING_PRICE}
-                value={price}
-                onChange={(event) => setPrice(event.target.value)}
-                placeholder="0"
-              />
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-2">
+                  <MoneyIcon size={15} />
+                </span>
+                <input
+                  id="listing-price"
+                  className="field pl-9 pr-14"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={MAX_LISTING_PRICE}
+                  value={price}
+                  onChange={(event) => setPrice(event.target.value)}
+                  placeholder="0"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.66rem] font-semibold text-muted-2">
+                  CPM
+                </span>
+              </div>
               <p className="mt-1 text-[0.64rem] text-muted-2">
-                En fazla {MAX_LISTING_PRICE.toLocaleString("tr-TR")} TL · sitede ödeme alınmaz
+                En fazla {MAX_LISTING_PRICE.toLocaleString("tr-TR")} CPM · sitede ödeme alınmaz
               </p>
             </div>
             <div>
