@@ -1790,14 +1790,6 @@ create policy "staff showcase read" on public.staff_showcase for select using (t
 
 grant select on public.staff_showcase to anon, authenticated;
 
--- Yalnızca bu haftanın seçimleri
-create or replace view public.staff_showcase_current as
-  select s.week_start, s.position, s.listing_id
-    from public.staff_showcase s
-   where s.week_start = date_trunc('week', now())::date;
-
-grant select on public.staff_showcase_current to anon, authenticated;
-
 -- Seçimi kaydet (boş dizi = vitrini bu hafta kapat)
 create or replace function public.admin_set_showcase(p_listing_ids uuid[])
 returns integer language plpgsql security definer set search_path = public as $$
@@ -1805,7 +1797,7 @@ declare
   v_week date := date_trunc('week', now())::date;
   v_count integer := 0;
 begin
-  if public.my_staff_role() <> 'owner' then
+  if public.my_staff_role() is distinct from 'owner' then
     raise exception 'Yetkili vitrinini sadece kurucu seçebilir';
   end if;
 
@@ -1815,13 +1807,9 @@ begin
     return 0;
   end if;
 
-  if array_length(p_listing_ids, 1) > 3 then
-    raise exception 'En fazla 3 ilan seçebilirsin';
-  end if;
-
   insert into public.staff_showcase (week_start, position, listing_id, created_by)
   select v_week, row_number() over (), s.id, auth.uid()
-    from (select unnest(p_listing_ids) as id) s
+    from (select unnest(p_listing_ids[1:3]) as id) s
    where exists (
      select 1 from public.listings l where l.id = s.id and l.status = 'active'
    );

@@ -22,6 +22,7 @@ import { MemberSearch, type MemberHit } from "@/components/admin/member-search";
 import { deleteAccountAsStaff, purgeOrphanAccounts } from "@/lib/admin";
 import { BanDialog } from "@/components/admin/ban-dialog";
 import { BADGES, badgeLabel } from "@/lib/badges";
+import { currentWeekStart } from "@/lib/showcase";
 import { AdminReviewList } from "@/components/admin/review-admin";
 import { ProfileEditor } from "@/components/admin/profile-editor";
 import { frames as frameList } from "@/lib/frames";
@@ -364,8 +365,9 @@ export default function AdminPage() {
 
     if (tab === "showcase") {
       const { data } = await supabase
-        .from("staff_showcase_current")
-        .select("listing_id, position")
+        .from("staff_showcase")
+        .select("listing_id, position, week_start")
+        .eq("week_start", currentWeekStart())
         .order("position", { ascending: true });
       setShowcasePick(((data ?? []) as { listing_id: string }[]).map((row) => row.listing_id));
     }
