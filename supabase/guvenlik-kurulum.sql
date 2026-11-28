@@ -1031,3 +1031,66 @@ union all select 'settle_sale', (select count(*) from pg_proc where proname='set
 union all select 'guard_review', (select count(*) from pg_proc where proname='guard_review') > 0
 union all select 'admin_delete_account', (select count(*) from pg_proc where proname='admin_delete_account') > 0
 union all select 'admin_purge_orphan_accounts', (select count(*) from pg_proc where proname='admin_purge_orphan_accounts') > 0;
+
+
+-- ---------- 5af) YETKİLİ VİTRİNİ ----------
+-- Kurucu her hafta en fazla 3 ilan seçer. Seçim yoksa vitrin hiç görünmez.
+create table if not exists public.staff_showcase (
+  week_start date not null,
+  position smallint not null check (position between 1 and 3),
+  listing_id uuid not null references public.listings (id) on delete cascade,
+  created_by uuid references public.profiles (id) on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (week_start, position)
+);
+
+alter table public.staff_showcase enable row level security;
+
+drop policy if exists "staff showcase read" on public.staff_showcase;
+create policy "staff showcase read" on public.staff_showcase for select using (true);
+
+grant select on public.staff_showcase to anon, authenticated;
+
+-- Yalnızca bu haftanın seçimleri
+create or replace view public.staff_showcase_current as
+  select s.week_start, s.position, s.listing_id
+    from public.staff_showcase s
+   where s.week_start = date_trunc('week', now())::date;
+
+grant select on public.staff_showcase_current to anon, authenticated;
+
+-- Seçimi kaydet (boş dizi = vitrini bu hafta kapat)
+create or replace function public.admin_set_showcase(p_listing_ids uuid[])
+returns integer language plpgsql security definer set search_path = public as $$
+declare
+  v_week date := date_trunc('week', now())::date;
+  v_count integer := 0;
+begin
+  if public.my_staff_role() <> 'owner' then
+    raise exception 'Yetkili vitrinini sadece kurucu seçebilir';
+  end if;
+
+  delete from public.staff_showcase where week_start = v_week;
+
+  if p_listing_ids is null or array_length(p_listing_ids, 1) is null then
+    return 0;
+  end if;
+
+  if array_length(p_listing_ids, 1) > 3 then
+    raise exception 'En fazla 3 ilan seçebilirsin';
+  end if;
+
+  insert into public.staff_showcase (week_start, position, listing_id, created_by)
+  select v_week, row_number() over (), s.id, auth.uid()
+    from (select unnest(p_listing_ids) as id) s
+   where exists (
+     select 1 from public.listings l where l.id = s.id and l.status = 'active'
+   );
+
+  select count(*) into v_count from public.staff_showcase where week_start = v_week;
+  return v_count;
+end; $$;
+grant execute on function public.admin_set_showcase(uuid[]) to authenticated;
+
+-- 60 günden eski seçimleri temizle
+delete from public.staff_showcase where week_start < (now()::date - 60);

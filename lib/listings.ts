@@ -355,6 +355,24 @@ export async function loadRelatedListings(
   return attachSellers(supabase, (data ?? []) as unknown as Omit<Listing, "seller">[]);
 }
 
+/** Verilen id'lerdeki yayındaki ilanlar (sıra korunur). */
+export async function loadListingsByIds(
+  supabase: SupabaseClient,
+  ids: string[],
+): Promise<Listing[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from(LISTINGS_TABLE)
+    .select(LISTING_COLUMNS)
+    .eq("status", "active")
+    .in("id", ids);
+
+  if (error) return [];
+  const rows = await attachSellers(supabase, (data ?? []) as unknown as Omit<Listing, "seller">[]);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return ids.map((id) => byId.get(id)).filter((row): row is Listing => Boolean(row));
+}
+
 /** Satıcının diğer ilanları. */
 export async function loadSellerListings(
   supabase: SupabaseClient,
