@@ -23,6 +23,9 @@ export const MAX_LISTING_PRICE = 50_000_000;
 export const MAX_LISTING_IMAGES = 6;
 export const MAX_LISTING_TITLE = 72;
 
+/** Fiyat birimi: oyun içi para, gerçek para değil */
+export const PRICE_UNIT = "CPM";
+
 /** Sadece sayı (para ikonu ile birlikte gösterilir) */
 export function formatPrice(value: number) {
   return new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 0 }).format(value);
@@ -30,11 +33,11 @@ export function formatPrice(value: number) {
 
 /** Düz metin içinde kullanılacak fiyat (örn. mesaj gövdesi) */
 export function formatPriceLabel(value: number) {
-  return `${formatPrice(value)} TL`;
+  return `${formatPrice(value)} CPM`;
 }
 
 export function formatCompactPrice(value: number) {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}M TL`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(value % 1_000 === 0 ? 0 : 1)}B TL`;
-  return `${value} TL`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 === 0 ? 0 : 1)}M CPM`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(value % 1_000 === 0 ? 0 : 1)}B CPM`;
+  return `${value} CPM`;
 }

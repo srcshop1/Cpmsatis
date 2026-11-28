@@ -32,7 +32,7 @@ const faqs = [
   },
   {
     q: "Fiyat üst sınırı nedir?",
-    a: "İlan fiyatı en fazla 50.000.000 TL girilebilir. Fiyat bilgilendirme amaçlıdır; sitede tahsilat yapılmaz.",
+    a: "İlan fiyatı en fazla 50.000.000 CPM girilebilir. Fiyat bilgilendirme amaçlıdır; sitede tahsilat yapılmaz.",
   },
   {
     q: "İlanım ne kadar yayında kalır?",

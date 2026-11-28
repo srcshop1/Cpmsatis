@@ -28,54 +28,88 @@ export function PwaSetup() {
 }
 
 /**
- * Profildeki küçük "Uygulamayı Yükle" butonu.
- * Tarayıcı yüklemeyi desteklemiyorsa hiç görünmez.
+ * Profildeki "Uygulamayı Yükle" butonu.
+ * Kurulabiliyorsa tarayıcının kurulum penceresini açar; kurulum penceresi
+ * gelmiyorsa (Safari, masaüstü vb.) nasıl yükleneceğini kısa bir notla söyler.
  */
+let deferredPrompt: InstallPrompt | null = null;
+const promptListeners = new Set<(prompt: InstallPrompt | null) => void>();
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    deferredPrompt = event as InstallPrompt;
+    promptListeners.forEach((listener) => listener(deferredPrompt));
+  });
+  window.addEventListener("appinstalled", () => {
+    deferredPrompt = null;
+    promptListeners.forEach((listener) => listener(null));
+  });
+}
+
 export function InstallAppButton() {
-  const [prompt, setPrompt] = useState<InstallPrompt | null>(null);
   const [installed, setInstalled] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
-    if (standalone) setInstalled(true);
-
-    const onPrompt = (event: Event) => {
-      event.preventDefault();
-      setPrompt(event as InstallPrompt);
-    };
-    const onInstalled = () => {
+    if (standalone) {
       setInstalled(true);
-      setPrompt(null);
-    };
+      return;
+    }
 
-    window.addEventListener("beforeinstallprompt", onPrompt);
+    const listener = (prompt: InstallPrompt | null) => setReady(Boolean(prompt));
+    promptListeners.add(listener);
+    setReady(Boolean(deferredPrompt));
+
+    const onInstalled = () => setInstalled(true);
     window.addEventListener("appinstalled", onInstalled);
     return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt);
+      promptListeners.delete(listener);
       window.removeEventListener("appinstalled", onInstalled);
     };
   }, []);
 
-  if (installed || !prompt) return null;
+  if (installed) return null;
 
   return (
-    <button
-      type="button"
-      onClick={async () => {
-        try {
-          await prompt.prompt();
-          await prompt.userChoice;
-        } catch {
-          // yoksay
-        }
-        setPrompt(null);
-      }}
-      className="inline-flex items-center gap-1 rounded-lg border border-line bg-white/4 px-2 py-1 text-[0.62rem] font-semibold text-muted transition hover:text-text"
-    >
-      <PlusIcon width={11} height={11} /> Uygulamayı Yükle
-    </button>
+    <div>
+      <button
+        type="button"
+        onClick={async () => {
+          setNote(null);
+          if (!deferredPrompt) {
+            const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+            setNote(
+              isIos
+                ? "Safari'de alttaki Paylaş simgesine bas, sonra “Ana Ekrana Ekle”yi seç."
+                : "Tarayıcı menüsünü aç, “Uygulamayı yükle” veya “Ana ekrana ekle”yi seç.",
+            );
+            return;
+          }
+          try {
+            await deferredPrompt.prompt();
+            await deferredPrompt.userChoice;
+          } catch {
+            // yoksay
+          }
+          deferredPrompt = null;
+          setReady(false);
+        }}
+        className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-accent/40 bg-accent/10 text-[0.72rem] font-semibold text-accent transition hover:bg-accent/15"
+      >
+        <PlusIcon width={12} height={12} /> Uygulamayı Yükle
+        {ready ? <span className="text-[0.6rem] text-accent/70">hazır</span> : null}
+      </button>
+      {note && (
+        <p className="mt-1.5 rounded-lg border border-line bg-white/4 px-2.5 py-2 text-[0.64rem] leading-relaxed text-muted">
+          {note}
+        </p>
+      )}
+    </div>
   );
 }

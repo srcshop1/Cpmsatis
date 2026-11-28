@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { MoneyIcon } from "@/components/price";
 import { useAuth } from "@/components/auth/auth-provider";
 import {
   CheckIcon,
@@ -205,7 +206,7 @@ export function EditListingClient() {
       return;
     }
     if (numericPrice > MAX_LISTING_PRICE) {
-      setError(`Fiyat en fazla ${MAX_LISTING_PRICE.toLocaleString("tr-TR")} TL olabilir.`);
+      setError(`Fiyat en fazla ${MAX_LISTING_PRICE.toLocaleString("tr-TR")} CPM olabilir.`);
       return;
     }
     const descriptionHtml = censorProfanity(sanitizeHtml(editorRef.current?.innerHTML ?? ""));
@@ -463,18 +464,26 @@ export function EditListingClient() {
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <div>
                 <label htmlFor="edit-price" className="mb-1.5 block text-xs text-muted">
-                  Fiyat (TL)
+                  Fiyat
                 </label>
-                <input
-                  id="edit-price"
-                  className="field"
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={MAX_LISTING_PRICE}
-                  value={price}
-                  onChange={(event) => setPrice(event.target.value)}
-                />
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-2">
+                    <MoneyIcon size={15} />
+                  </span>
+                  <input
+                    id="edit-price"
+                    className="field pl-9 pr-14"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={MAX_LISTING_PRICE}
+                    value={price}
+                    onChange={(event) => setPrice(event.target.value)}
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.66rem] font-semibold text-muted-2">
+                    CPM
+                  </span>
+                </div>
 
               </div>
               <div>
@@ -527,7 +536,7 @@ export function EditListingClient() {
                 <div className="mt-2 rounded-xl border border-mint/40 bg-mint/10 px-3 py-2">
                   <p className="text-[0.7rem] font-semibold text-mint">
                     %{discount.percent} indirimde · eski fiyat{" "}
-                    {discount.original.toLocaleString("tr-TR")} TL
+                    {discount.original.toLocaleString("tr-TR")} CPM
                   </p>
                   <button
                     type="button"
@@ -551,7 +560,7 @@ export function EditListingClient() {
                 type="number"
                 inputMode="numeric"
                 min={0}
-                placeholder="İndirimli fiyat (TL)"
+                placeholder="İndirimli fiyat (CPM)"
                 value={discountPrice}
                 onChange={(event) => setDiscountPrice(event.target.value)}
               />

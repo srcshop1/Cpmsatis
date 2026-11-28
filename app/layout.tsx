@@ -8,6 +8,7 @@ const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL || "https://srcshop1.github.io/Cpmsatis"
 ).replace(/\/$/, "");
 const SITE_NAME = "CPM Satış";
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH || "";
 const SITE_DESC =
   "CPM araç, çizim ve hesap alım-satımı. İlan ver, filtrele, satıcıyla mesajlaşarak anlaş.";
 
@@ -44,9 +45,15 @@ export const metadata: Metadata = {
     images: [`${SITE_URL}/og.png`],
   },
   robots: { index: true, follow: true },
-  manifest: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/manifest.webmanifest`,
+  manifest: `${BASE}/manifest.webmanifest`,
   appleWebApp: { capable: true, title: "CPM Satış", statusBarStyle: "black-translucent" },
-  icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }] },
+  icons: {
+    icon: [
+      { url: `${BASE}/icon-192.png`, sizes: "192x192", type: "image/png" },
+      { url: `${BASE}/icon.svg`, type: "image/svg+xml" },
+    ],
+    apple: [{ url: `${BASE}/icon-192.png` }],
+  },
 };
 
 export const viewport: Viewport = {

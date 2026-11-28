@@ -253,7 +253,7 @@ export function ListingsClient() {
           })}
           {(filters.min || filters.max) && (
             <span className="chip chip-active px-2.5 py-1 text-[0.72rem]">
-              {filters.min || "0"} – {filters.max || "50.000.000"} TL
+              {filters.min || "0"} – {filters.max || "50.000.000"} CPM
             </span>
           )}
           {filters.online && (
@@ -436,7 +436,7 @@ export function ListingsClient() {
                   />
                 </div>
                 <p className="mt-1.5 text-[0.68rem] text-muted-2">
-                  En fazla {MAX_LISTING_PRICE.toLocaleString("tr-TR")} TL
+                  En fazla {MAX_LISTING_PRICE.toLocaleString("tr-TR")} CPM
                 </p>
               </div>
 
