@@ -244,29 +244,39 @@ export async function loadListingCounters(
   return { views: Number(row.view_count ?? 0), favorites: Number(row.favorite_count ?? 0) };
 }
 
-/** Görüntülenmeyi bir kez sayar (aynı kişi 6 saatte bir). */
+/** Görüntülenmeyi sayar. Bir kişi bir ilana ömrü boyunca 1 kez katkı verir. */
 export async function registerListingView(
   supabase: SupabaseClient,
   listingId: string,
+  userId?: string | null,
 ): Promise<number | null> {
-  const key = `cpmsatis:view:${listingId}`;
-  try {
-    const last = Number(window.localStorage.getItem(key) ?? 0);
-    if (last && Date.now() - last < 6 * 60 * 60 * 1000) return null;
-  } catch {
-    // localStorage kapalıysa sayaç yine çalışsın
+  const key = `cpmsatis:viewed:${listingId}`;
+
+  // Giriş yapmamış ziyaretçi: cihaz başına bir kez
+  if (!userId) {
+    try {
+      if (window.localStorage.getItem(key)) return null;
+    } catch {
+      // localStorage kapalıysa sayaç yine çalışsın
+    }
   }
 
-  const { data, error } = await supabase.rpc("increment_listing_view", {
-    p_listing: listingId,
-  });
+  let { data, error } = await supabase.rpc("register_listing_view", { p_listing: listingId });
+
+  // Eski kurulumda fonksiyon yoksa basit sayaca düş
+  if (error) {
+    const fallback = await supabase.rpc("increment_listing_view", { p_listing: listingId });
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) return null;
 
   try {
-    window.localStorage.setItem(key, String(Date.now()));
+    window.localStorage.setItem(key, "1");
   } catch {
     // yoksay
   }
+
   return Number(data ?? 0);
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { FrameRing } from "@/components/frame-ring";
 import { ShieldIcon } from "@/components/icons";
 
 /** Mavi tik — onaylı satıcı */
@@ -109,7 +110,7 @@ export function StaffBadge({
   );
 }
 
-/** Avatarı çerçeve rengiyle saran kutu */
+/** Avatarı holografik, hareketli çerçeveyle saran kutu */
 export function FramedAvatar({
   src,
   username,
@@ -123,31 +124,14 @@ export function FramedAvatar({
   size?: number;
   rounded?: string;
 }) {
-  const tone =
-    {
-      member: "from-[#3a4356] to-[#1b2130]",
-      verified_seller: "from-[#35d49a] to-[#0f9d6e]",
-      vip: "from-[#ffd166] to-[#ff8a1f]",
-      premium: "from-[#c084fc] to-[#7c3aed]",
-      moderator: "from-[#6c8cff] to-[#3b4fd8]",
-      owner: "from-[#ff9a3c] to-[#f26a00]",
-    }[frame ?? "member"] ?? "from-[#3a4356] to-[#1b2130]";
-
   return (
-    <span
-      className={`grid shrink-0 place-items-center bg-gradient-to-br ${tone} p-[2px] ${rounded}`}
-      style={{ height: size, width: size }}
-    >
-      <span
-        className={`grid h-full w-full place-items-center overflow-hidden bg-ink text-[0.7rem] font-extrabold text-text ${rounded}`}
-      >
-        {src ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="" className="h-full w-full object-cover" />
-        ) : (
-          (username ?? "?").charAt(0).toUpperCase()
-        )}
-      </span>
-    </span>
+    <FrameRing frame={frame} size={size} rounded={rounded}>
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        (username ?? "?").charAt(0).toUpperCase()
+      )}
+    </FrameRing>
   );
 }

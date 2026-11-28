@@ -31,6 +31,7 @@ import {
 import { myStaffRole } from "@/lib/social";
 import { findFrame, frames, ownedFrames } from "@/lib/frames";
 import { StaffBadge, VerifiedBadge } from "@/components/user-badge";
+import { FrameRing } from "@/components/frame-ring";
 import { InstallAppButton } from "@/components/pwa";
 import { DeleteAccountDialog } from "@/components/account/delete-account-dialog";
 
@@ -628,13 +629,9 @@ export default function ProfilePage() {
                 }`}
                 title={unlocked ? `${frame.name} çerçevesini seç` : frame.hint}
               >
-                <span
-                  className={`grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br ${frame.tone} p-[2px]`}
-                >
-                  <span className="grid h-full w-full place-items-center rounded-full bg-ink text-[0.7rem] font-bold text-text">
-                    {frame.name.charAt(0)}
-                  </span>
-                </span>
+                <FrameRing frame={frame.slug} size={40} rounded="rounded-full">
+                  <span className="text-[0.7rem] font-bold text-text">{frame.name.charAt(0)}</span>
+                </FrameRing>
                 <span className="text-center text-[0.6rem] leading-tight text-muted">
                   {frame.name}
                 </span>

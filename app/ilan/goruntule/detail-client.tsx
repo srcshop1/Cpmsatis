@@ -31,6 +31,7 @@ import {
   LISTINGS_TABLE,
   categoryLabel,
   daysLeft,
+  isExpired,
   isListingFavorited,
   listingExpiresAt,
   loadListingCounters,
@@ -185,7 +186,7 @@ export function ListingDetailClient() {
 
       // Görüntülenme: sahibi hariç, aynı kişi 6 saatte bir sayılır
       if (user?.id !== detail.seller_id) {
-        void registerListingView(supabase, detail.id).then((total) => {
+        void registerListingView(supabase, detail.id, user?.id ?? null).then((total) => {
           if (!cancelled && total !== null) setViews(total);
         });
       } else {
@@ -302,7 +303,7 @@ export function ListingDetailClient() {
 
   function shareOnWhatsApp() {
     if (!listing) return;
-    const text = `${listing.title} · ${formatPriceLabel(listing.price)}\n${listingUrl()}`;
+    const text = `${listing.title}\n${listingUrl()}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   }
 
@@ -377,20 +378,29 @@ export function ListingDetailClient() {
     if (!supabase || !user || !listing) return;
     setFeaturedBusy(true);
     setNotice(null);
-    const { error: requestError } = await supabase.from("featured_requests").insert({
-      listing_id: listing.id,
-      seller_id: user.id,
-      days: featuredDays,
+    const { error: requestError } = await supabase.rpc("request_featured", {
+      p_listing: listing.id,
+      p_days: featuredDays,
     });
     setFeaturedBusy(false);
     setFeaturedOpen(false);
     if (requestError) {
-      setNotice("Talep gönderilemedi. Lütfen tekrar dene.");
+      const text = requestError.message ?? "";
+      // Sunucu kuralı Türkçe anlatıyorsa onu göster, yoksa genel mesaj
+      setNotice(
+        /[çğıöşüÇĞİÖŞÜ]/.test(text) && !/could not find|schema cache|function/i.test(text)
+          ? text
+          : "Talep gönderilemedi. Lütfen tekrar dene.",
+      );
       return;
     }
     setFeaturedPending(true);
     setNotice("Öne çıkarma talebin yetkiliye gönderildi. Onaylanınca ilan öne çıkar.");
   }
+
+  const canRenew = Boolean(
+    listing && (isExpired(listing.created_at) || daysLeft(listing.created_at) <= 1),
+  );
 
   async function renew() {
     if (!supabase || !listing) return;
@@ -614,7 +624,7 @@ export function ListingDetailClient() {
               </span>
               <span className="inline-flex items-center gap-1">
                 <EyeIcon width={12} height={12} />
-                {views >= 10 ? `${views} kişi baktı` : "İlk bakanlardan biri ol"}
+                {views > 0 ? `${views} kişi baktı` : "Henüz görüntülenme yok"}
               </span>
               <span className="inline-flex items-center gap-1">
                 <HeartIcon width={12} height={12} /> {favorites} favori
@@ -743,10 +753,22 @@ export function ListingDetailClient() {
                 <button
                   type="button"
                   onClick={renew}
-                  disabled={sending}
-                  className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-line bg-white/4 text-sm font-semibold text-muted transition hover:text-text disabled:opacity-60"
+                  disabled={sending || !canRenew}
+                  title={
+                    canRenew
+                      ? `İlanı ${LISTING_LIFETIME_DAYS} gün daha yayında tut`
+                      : "İlanın süresi dolmadan yenilenemez. Son 1 gün kaldığında yenileyebilirsin."
+                  }
+                  className={`flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border text-sm font-semibold transition disabled:opacity-45 ${
+                    canRenew
+                      ? "border-accent/40 bg-accent/10 text-accent hover:bg-accent/20"
+                      : "border-line bg-white/4 text-muted-2"
+                  }`}
                 >
-                  <ClockIcon width={15} height={15} /> İlanı Yenile ({LISTING_LIFETIME_DAYS} gün)
+                  <ClockIcon width={15} height={15} />
+                  {canRenew
+                    ? `İlanı Yenile (${LISTING_LIFETIME_DAYS} gün)`
+                    : `Yenileme ${daysLeft(listing.created_at) - 1} gün sonra açılır`}
                 </button>
                 <button
                   type="button"
