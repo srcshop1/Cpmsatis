@@ -111,13 +111,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Askıya alan yetkilinin adı
       let banAuthorUsername: string | null = null;
+      let banAuthorRole: string | null = null;
       if (extra.banned_by) {
         const author = await supabase
           .from("profiles")
-          .select("username")
+          .select("username, staff_tag")
           .eq("id", extra.banned_by)
           .maybeSingle();
         banAuthorUsername = (author.data?.username as string | undefined) ?? null;
+        const tag = (author.data?.staff_tag as string | undefined) ?? null;
+        banAuthorRole =
+          tag === "owner" ? "kurucu" : tag === "moderator" ? "moderatör" : tag ? "yetkili" : null;
       }
 
       return {
@@ -136,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         banReason: extra.ban_reason ?? null,
         bannedBy: extra.banned_by ?? null,
         banAuthorUsername,
+        banAuthorRole,
         bannedAt: extra.banned ? (extra.updated_at ?? null) : null,
         createdAt: authUser.created_at,
       };

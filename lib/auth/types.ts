@@ -14,6 +14,7 @@ export type AppUser = {
   banReason?: string | null;
   bannedBy?: string | null;
   banAuthorUsername?: string | null;
+  banAuthorRole?: string | null;
   bannedAt?: string | null;
   createdAt?: string;
 };
