@@ -50,7 +50,7 @@ export function StaffShowcase() {
 
         <div className="relative mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {listings.map((listing) => (
-            <ListingCard key={listing.id} listing={listing} />
+            <ListingCard key={listing.id} listing={listing} picked />
           ))}
         </div>
       </div>

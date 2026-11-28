@@ -6,7 +6,7 @@ import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge"
 import { categoryLabel, discountOf, isFeatured, type Listing } from "@/lib/listings";
 import { Price } from "@/components/price";
 
-export function ListingCard({ listing }: { listing: Listing }) {
+export function ListingCard({ listing, picked = false }: { listing: Listing; picked?: boolean }) {
   const cover = listing.images?.[0];
   const seller = listing.seller;
   const categories =
@@ -19,7 +19,7 @@ export function ListingCard({ listing }: { listing: Listing }) {
       href={`/ilan/goruntule?id=${listing.id}`}
       className={`card card-hover group flex flex-col overflow-hidden ${
         isFeatured(listing) ? "card-featured" : ""
-      }`}
+      } ${picked ? "card-pick" : ""}`}
     >
       <div className="relative aspect-square w-full overflow-hidden bg-black/40">
         {cover ? (
@@ -59,6 +59,12 @@ export function ListingCard({ listing }: { listing: Listing }) {
             </span>
           );
         })()}
+
+        {picked && (
+          <span className="absolute right-2 top-2 badge border border-white/25 bg-black/70 text-[0.55rem] font-bold uppercase tracking-wide text-white backdrop-blur">
+            ✦ Vitrin
+          </span>
+        )}
 
         {isFeatured(listing) && (
           <span className="absolute right-2 top-2 badge border border-[#93c5fd]/50 bg-[#2563eb] text-[0.62rem] font-bold text-white">

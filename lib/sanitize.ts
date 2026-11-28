@@ -25,7 +25,15 @@ const ALLOWED_TAGS = new Set([
   "BLOCKQUOTE",
 ]);
 
-const ALLOWED_STYLES = ["color", "font-size", "font-weight", "font-style", "text-decoration"];
+const ALLOWED_STYLES = [
+  "color",
+  "font-size",
+  "font-family",
+  "font-weight",
+  "font-style",
+  "text-decoration",
+  "text-align",
+];
 
 export function sanitizeHtml(input: string): string {
   if (typeof window === "undefined") return "";

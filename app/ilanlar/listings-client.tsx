@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ListingCard } from "@/components/listing-card";
+import { loadShowcaseIds } from "@/lib/showcase";
 import {
   BoltIcon,
   CheckIcon,
@@ -59,6 +60,7 @@ export function ListingsClient() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
 
   const query = (searchParams.get("q") ?? "").trim();
   const filtersKey = searchParams.toString();
@@ -104,7 +106,9 @@ export function ListingsClient() {
         verifiedOnly: parsed.verified,
       });
 
+      const picks = await loadShowcaseIds(supabase);
       if (cancelled) return;
+      setPickedIds(picks);
       if (error) {
         setLoadState("error");
         setLoadError(error);
@@ -333,7 +337,7 @@ export function ListingsClient() {
         {loadState === "ready" && listings.length > 0 && (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {listings.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
+              <ListingCard key={listing.id} listing={listing} picked={pickedIds.includes(listing.id)} />
             ))}
           </div>
         )}

@@ -61,6 +61,74 @@ body {
   border-radius: var(--radius-xl2);
 }
 
+/* Yetkili vitrini: holografik, renk geçişli çerçeve */
+.card-pick {
+  position: relative;
+  border-color: transparent;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 18px 46px -26px rgba(168, 85, 247, 0.75);
+  animation: pick-glow 5.5s ease-in-out infinite;
+}
+
+.card-pick::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.7px;
+  background: conic-gradient(
+    from 0deg,
+    #ffb35c,
+    #ff5c8a,
+    #a855f7,
+    #38bdf8,
+    #35d49a,
+    #ffb35c
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: pick-hue 6s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes pick-hue {
+  from {
+    filter: hue-rotate(0deg) saturate(1.15);
+  }
+  to {
+    filter: hue-rotate(360deg) saturate(1.15);
+  }
+}
+
+@keyframes pick-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.1),
+      0 18px 46px -26px rgba(168, 85, 247, 0.7);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.14),
+      0 20px 54px -24px rgba(56, 189, 248, 0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-pick,
+  .card-pick::before {
+    animation: none;
+  }
+}
+
 /* Öne çıkarılan ilanlar mavi çerçeve ile ayrılır */
 .card-featured {
   border-color: rgba(59, 130, 246, 0.7);
@@ -446,4 +514,19 @@ body {
   box-shadow:
     0 0 16px rgba(167, 139, 250, 0.3),
     0 0 20px rgba(109, 40, 217, 0.16);
+}
+
+/* İlan açıklaması editörü: telefonda uzun basınca çıkan kopyala/yapıştır menüsünü kapat */
+.rich-editor {
+  overflow-wrap: anywhere;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .rich-editor,
+  .rich-editor * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
 }

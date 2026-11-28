@@ -72,9 +72,42 @@ export default function CreateListingPage() {
     });
   }
 
+  const SIZE_PX: Record<string, string> = {
+    "1": "10px",
+    "2": "13px",
+    "3": "16px",
+    "4": "18px",
+    "5": "24px",
+    "6": "32px",
+    "7": "40px",
+  };
+
+  /** Tarayıcının <font> etiketlerini kalıcı <span style> hâline çevirir */
+  function normalizeFontTags() {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.querySelectorAll("font").forEach((node) => {
+      const span = document.createElement("span");
+      const styles: string[] = [];
+      const size = node.getAttribute("size");
+      const face = node.getAttribute("face");
+      const color = node.getAttribute("color");
+      if (size && SIZE_PX[size]) styles.push(`font-size:${SIZE_PX[size]}`);
+      if (face) styles.push(`font-family:${face.replace(/["']/g, "")}`);
+      if (color) styles.push(`color:${color}`);
+      if (styles.length > 0) span.setAttribute("style", styles.join("; "));
+      while (node.firstChild) span.appendChild(node.firstChild);
+      node.replaceWith(span);
+    });
+  }
+
   function exec(command: string, value?: string) {
-    editorRef.current?.focus();
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    document.execCommand("styleWithCSS", false, "true");
     document.execCommand(command, false, value);
+    normalizeFontTags();
   }
 
   async function submit() {
@@ -290,13 +323,26 @@ export default function CreateListingPage() {
             <select
               className="h-7 rounded-md border border-line bg-ink px-1.5 text-[0.7rem] text-muted outline-none"
               onChange={(event) => exec("fontSize", event.target.value)}
-              defaultValue="3"
+              value="3"
               aria-label="Yazı boyutu"
             >
               <option value="2">Küçük</option>
               <option value="3">Normal</option>
               <option value="5">Büyük</option>
               <option value="6">Çok büyük</option>
+            </select>
+            <select
+              className="h-7 rounded-md border border-line bg-ink px-1.5 text-[0.7rem] text-muted outline-none"
+              onChange={(event) => exec("fontName", event.target.value)}
+              value=""
+              aria-label="Yazı tipi"
+            >
+              <option value="">Yazı tipi</option>
+              <option value="DejaVu Sans, Arial, sans-serif">Sade</option>
+              <option value="Georgia, 'Times New Roman', serif">Serif</option>
+              <option value="'Courier New', monospace">Mono</option>
+              <option value="Verdana, Geneva, sans-serif">Verdana</option>
+              <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
             </select>
             <span className="mx-1 h-5 w-px bg-line" />
             {["#eef2f8", "#ff8a1f", "#35d49a", "#6c8cff", "#ff5c6c"].map((color) => (
@@ -315,9 +361,10 @@ export default function CreateListingPage() {
           <div
             ref={editorRef}
             contentEditable
+            onContextMenu={(event) => event.preventDefault()}
             suppressContentEditableWarning
             data-placeholder="Ürününü detaylı anlat: ne var, ne yok, takas kabul eder misin?"
-            className="min-h-32 w-full rounded-b-xl border border-t-0 border-line bg-ink/70 p-3 text-sm leading-relaxed outline-none focus:border-accent/60 [&:empty]:before:text-muted-2 [&:empty]:before:content-[attr(data-placeholder)]"
+            className="rich-editor min-h-32 w-full rounded-b-xl border border-t-0 border-line bg-ink/70 p-3 text-sm leading-relaxed outline-none focus:border-accent/60 [&:empty]:before:text-muted-2 [&:empty]:before:content-[attr(data-placeholder)]"
           />
         </section>
 

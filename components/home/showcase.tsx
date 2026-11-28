@@ -6,6 +6,7 @@ import { ArrowRightIcon, CheckIcon, StarIcon } from "@/components/icons";
 import { ListingCard } from "@/components/listing-card";
 import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
 import { fetchListings, isFeatured, type Listing, type ListingSeller } from "@/lib/listings";
+import { loadShowcaseIds } from "@/lib/showcase";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Seller = ListingSeller & { username: string };
@@ -24,6 +25,7 @@ export function HomeShowcase() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [listings, setListings] = useState<Listing[]>([]);
   const [sellers, setSellers] = useState<Seller[]>([]);
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,9 +47,12 @@ export function HomeShowcase() {
           .limit(10),
       ]);
 
+      const picks = await loadShowcaseIds(supabase);
+
       if (cancelled) return;
       setListings(rows);
       setSellers((sellerRes.data ?? []) as unknown as Seller[]);
+      setPickedIds(picks);
       setLoading(false);
     })();
 
@@ -95,7 +100,7 @@ export function HomeShowcase() {
 
           <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {featured.map((listing) => (
-              <ListingCard key={listing.id} listing={listing} />
+              <ListingCard key={listing.id} listing={listing} picked={pickedIds.includes(listing.id)} />
             ))}
           </div>
         </section>
@@ -119,7 +124,7 @@ export function HomeShowcase() {
 
         <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
           {latest.map((listing) => (
-            <ListingCard key={listing.id} listing={listing} />
+            <ListingCard key={listing.id} listing={listing} picked={pickedIds.includes(listing.id)} />
           ))}
         </div>
       </section>
