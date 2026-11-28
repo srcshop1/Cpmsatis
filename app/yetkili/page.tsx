@@ -1027,23 +1027,55 @@ export default function AdminPage() {
     setNotice(null);
     const profile = await findProfile(frameQuery);
     if (!profile) {
-      setNotice("Kullanıcı bulunamadı.");
+      setNotice("Kullanıcı bulunamadı. Kullanıcı adını veya e-postayı tam yaz.");
       return;
     }
     setBusy("frame");
-    const { error } = await supabase.rpc("admin_set_frame", {
+
+    let { error } = await supabase.rpc("admin_set_frame", {
       p_user: profile.id,
       p_frame: frameChoice,
       p_remove: remove,
     });
+
+    // Fonksiyon veritabanında eski/yoksa doğrudan tabloya yaz
+    if (error && /could not find the function|schema cache|does not exist/i.test(error.message)) {
+      const fallback = remove
+        ? await supabase
+            .from("user_frames")
+            .delete()
+            .eq("user_id", profile.id)
+            .eq("frame", frameChoice)
+        : await supabase.from("user_frames").upsert(
+            { user_id: profile.id, frame: frameChoice, granted_by: user?.id ?? null },
+            { onConflict: "user_id,frame", ignoreDuplicates: true },
+          );
+
+      error = fallback.error;
+      if (remove) {
+        await supabase
+          .from("profiles")
+          .update({ equipped_frame: "member" })
+          .eq("id", profile.id)
+          .eq("equipped_frame", frameChoice);
+      }
+    }
+
     setBusy(null);
     if (error) {
       console.error("[cerceve]", error.message);
-      setNotice("Çerçeve kaydedilemedi. Lütfen tekrar dene.");
+      const text = error.message ?? "";
+      if (/check constraint/i.test(text)) {
+        setNotice("Bu çerçeve türü veritabanında henüz açık değil. SQL güncellemesini çalıştır.");
+      } else if (/[çğıöşüÇĞİÖŞÜ]/.test(text)) {
+        setNotice(text);
+      } else {
+        setNotice("Çerçeve kaydedilemedi. Lütfen tekrar dene.");
+      }
       return;
     }
     setNotice(
-      `${remove ? "Kaldırıldı" : "Verildi"}: @${profile.username} → ${
+      `${remove ? "Alındı" : "Verildi"}: @${profile.username} → ${
         frameList.find((frame) => frame.slug === frameChoice)?.name ?? frameChoice
       }`,
     );
@@ -1051,15 +1083,20 @@ export default function AdminPage() {
 
   async function findProfile(query: string) {
     if (!supabase) return null;
-    const value = query.trim();
+    const value = query.trim().replace(/^@/, "");
     if (!value) return null;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("id, username, email")
-      .or(`username.ilike.${value},email.ilike.${value}`)
+      .or(`username.ilike.%${value}%,email.ilike.${value}`)
       .limit(1)
       .maybeSingle();
+
+    if (error) {
+      console.error("[uye-ara]", error.message);
+      return null;
+    }
 
     return (data as ProfileRow | null) ?? null;
   }

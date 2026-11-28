@@ -740,7 +740,9 @@ export default function ProfilePage() {
             </p>
             <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
               {achievementFrames.map((frame) => {
-                const unlocked = isFrameUnlocked(frame, frameStats);
+                const earned = isFrameUnlocked(frame, frameStats);
+                const gifted = grantedFrames.includes(frame.slug);
+                const unlocked = earned || gifted;
                 const isActive = (user.frame ?? "member") === frame.slug;
                 const progress = unlocked ? null : frameProgress(frame, frameStats);
                 return (
@@ -775,6 +777,9 @@ export default function ProfilePage() {
                     <span className="text-center text-[0.5rem] leading-tight text-muted-2">
                       {frame.hint}
                     </span>
+                    {gifted && !earned && (
+                      <span className="text-[0.5rem] font-semibold text-mint">hediye</span>
+                    )}
                     {isActive && (
                       <span className="text-[0.55rem] font-semibold text-accent">aktif</span>
                     )}

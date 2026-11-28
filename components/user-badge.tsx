@@ -53,6 +53,10 @@ export function TagBadge({ tag, small = false }: { tag: string; small?: boolean 
       label: "Premium",
       className: "border-[#c084fc]/40 bg-[#c084fc]/12 text-[#d8b4fe]",
     },
+    verified_seller: {
+      label: "Onaylı Satıcı",
+      className: "border-[#3b82f6]/40 bg-[#3b82f6]/12 text-[#9ec2ff]",
+    },
     trusted: {
       label: "Güvenilir",
       className: "border-[#35d49a]/40 bg-[#35d49a]/12 text-[#8ff0c8]",
