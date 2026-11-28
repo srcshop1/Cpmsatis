@@ -592,7 +592,7 @@ export function ListingDetailClient() {
                     </span>
                   ))}
                 </span>
-                <h1 className="mt-2 text-lg font-extrabold leading-snug sm:text-xl">
+                <h1 className="selectable mt-2 text-lg font-extrabold leading-snug sm:text-xl">
                   {listing.title}
                 </h1>
               </div>
@@ -685,7 +685,7 @@ export function ListingDetailClient() {
               <div className="min-w-0 flex-1">
                 <Link
                   href={`/satici?id=${listing.seller_id}`}
-                  className="block truncate text-[0.95rem] font-bold hover:text-accent"
+                  className="selectable block truncate text-[0.95rem] font-bold hover:text-accent"
                 >
                   @{seller?.username ?? "satıcı"}
                 </Link>
@@ -1076,7 +1076,7 @@ export function ListingDetailClient() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={listing.images[0]} alt="" className="h-11 w-11 rounded-lg object-cover" />
                 <div className="min-w-0">
-                  <p className="truncate text-[0.78rem] font-semibold">{listing.title}</p>
+                  <p className="selectable truncate text-[0.78rem] font-semibold">{listing.title}</p>
                   <p className="text-[0.68rem] text-muted-2"><Price value={listing.price} iconSize={11} /></p>
                 </div>
               </div>
