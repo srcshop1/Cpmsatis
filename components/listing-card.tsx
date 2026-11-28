@@ -3,20 +3,10 @@
 import Link from "next/link";
 import { CheckIcon, StarIcon } from "@/components/icons";
 import { FramedAvatar, StaffBadge, VerifiedTick } from "@/components/user-badge";
-import { useState } from "react";
 import { categoryLabel, discountOf, isFeatured, type Listing } from "@/lib/listings";
 import { Price } from "@/components/price";
 
-export function ListingCard({
-  listing,
-  picked = false,
-  revealIndex,
-}: {
-  listing: Listing;
-  picked?: boolean;
-  revealIndex?: number;
-}) {
-  const [loaded, setLoaded] = useState(false);
+export function ListingCard({ listing, picked = false }: { listing: Listing; picked?: boolean }) {
   const cover = listing.images?.[0];
   const seller = listing.seller;
   const categories =
@@ -29,8 +19,7 @@ export function ListingCard({
       href={`/ilan/goruntule?id=${listing.id}`}
       className={`card card-hover group flex flex-col overflow-hidden ${
         isFeatured(listing) ? "card-featured" : ""
-      } ${picked ? "card-pick" : ""} ${revealIndex !== undefined ? "reveal" : ""}`}
-      style={revealIndex !== undefined ? { animationDelay: `${Math.min(revealIndex, 12) * 35}ms` } : undefined}
+      } ${picked ? "card-pick" : ""}`}
     >
       <div className="relative aspect-square w-full overflow-hidden bg-black/40">
         {cover ? (
@@ -38,10 +27,7 @@ export function ListingCard({
           <img
             src={cover}
             alt={listing.title}
-            className={`img-fade h-full w-full object-cover transition duration-300 group-hover:scale-[1.03] ${
-              loaded ? "loaded" : ""
-            }`}
-            onLoad={() => setLoaded(true)}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
             loading="lazy"
           />
         ) : (

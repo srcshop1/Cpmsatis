@@ -123,13 +123,8 @@ export function HomeShowcase() {
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
-          {latest.map((listing, index) => (
-            <ListingCard
-              key={listing.id}
-              listing={listing}
-              revealIndex={index}
-              picked={pickedIds.includes(listing.id)}
-            />
+          {latest.map((listing) => (
+            <ListingCard key={listing.id} listing={listing} picked={pickedIds.includes(listing.id)} />
           ))}
         </div>
       </section>
