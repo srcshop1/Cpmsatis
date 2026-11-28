@@ -99,6 +99,8 @@ export function ChatClient() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [listing, setListing] = useState<{ id: string; title: string; price: number; images: string[] | null } | null>(null);
   const [imageViewer, setImageViewer] = useState<string | null>(null);
+  const [copyMessage, setCopyMessage] = useState<Message | null>(null);
+  const longPress = useRef<{ timer: number | null; id: string | null }>({ timer: null, id: null });
   const [clearedAt, setClearedAt] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
   const [draft, setDraft] = useState("");
@@ -563,6 +565,21 @@ export function ChatClient() {
     setReportDone(true);
   }
 
+  async function copyMessageText() {
+    if (!copyMessage) return;
+    const text =
+      copyMessage.body?.trim() ||
+      (copyMessage.listing_ref?.image ? copyMessage.listing_ref.image : "");
+    setCopyMessage(null);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setInfo("Mesaj kopyalandı.");
+    } catch {
+      setError("Mesaj kopyalanamadı.");
+    }
+  }
+
   useEffect(() => {
     if (!imageViewer) return;
     const onKey = (event: KeyboardEvent) => {
@@ -729,11 +746,21 @@ export function ChatClient() {
                 className={`flex ${mine ? "justify-end" : "justify-start"}`}
                 onTouchStart={(event) => {
                   touchStart.current = { id: message.id, x: event.touches[0].clientX };
+                  if (longPress.current.timer) window.clearTimeout(longPress.current.timer);
+                  longPress.current.id = message.id;
+                  longPress.current.timer = window.setTimeout(() => {
+                    longPress.current.timer = null;
+                    setCopyMessage(message);
+                  }, 520);
                 }}
                 onTouchMove={(event) => {
                   const start = touchStart.current;
                   if (!start || start.id !== message.id) return;
                   const dx = event.touches[0].clientX - start.x;
+                  if (Math.abs(dx) > 8 && longPress.current.timer) {
+                    window.clearTimeout(longPress.current.timer);
+                    longPress.current.timer = null;
+                  }
                   // Kendi mesajımızı sağa, karşı tarafın mesajını sola kaydırınca yanıtlanır
                   if (mine) {
                     if (dx > 6) setDrag({ id: message.id, dx: Math.min(dx, 70) });
@@ -742,6 +769,10 @@ export function ChatClient() {
                   }
                 }}
                 onTouchEnd={() => {
+                  if (longPress.current.timer) {
+                    window.clearTimeout(longPress.current.timer);
+                    longPress.current.timer = null;
+                  }
                   if (drag && drag.id === message.id) {
                     const enough = mine ? drag.dx >= 44 : drag.dx <= -44;
                     if (enough) setReplyTo(message);
@@ -1133,6 +1164,52 @@ export function ChatClient() {
         onConfirm={clearChat}
         onCancel={() => setConfirmClear(false)}
       />
+      {copyMessage && (
+        <div className="fixed inset-0 z-[125] flex items-end justify-center sm:items-center">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setCopyMessage(null)}
+            aria-label="Kapat"
+          />
+          <div className="animate-pop relative w-full max-w-md rounded-t-2xl border border-line bg-surface p-4 sm:rounded-2xl">
+            <p className="text-[0.6rem] font-semibold uppercase tracking-wider text-muted-2">
+              Mesaj
+            </p>
+            <p className="mt-1.5 line-clamp-3 whitespace-pre-line break-words text-[0.8rem] leading-relaxed text-muted">
+              {copyMessage.body?.trim() || "Görsel"}
+            </p>
+
+            <div className="mt-3 grid gap-2">
+              <button
+                type="button"
+                onClick={() => void copyMessageText()}
+                className="btn btn-primary h-10 text-sm"
+              >
+                Kopyala
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyTo(copyMessage);
+                  setCopyMessage(null);
+                }}
+                className="btn h-10 border border-line bg-white/4 text-sm text-muted"
+              >
+                Alıntıla
+              </button>
+              <button
+                type="button"
+                onClick={() => setCopyMessage(null)}
+                className="btn h-10 border border-line bg-white/2 text-sm text-muted-2"
+              >
+                Vazgeç
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {imageViewer && (
         <div className="fixed inset-0 z-[130] flex flex-col bg-black">
           <div className="flex items-center justify-end px-3 py-2">

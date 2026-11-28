@@ -530,3 +530,24 @@ body {
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* ---------- Metin seçimi ----------
+   Uzun basınca mavi seçim / kopyala menüsü sitede kapalı.
+   Sadece form alanları, ilan açıklaması ve sohbet (kendi kopyala menüsü) açık. */
+html,
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"],
+.selectable,
+.selectable * {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
