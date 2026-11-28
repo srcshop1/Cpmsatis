@@ -232,3 +232,134 @@ body {
     transform: none;
   }
 }
+
+/* ---------------- ÇERÇEVELER (holografik) ---------------- */
+@keyframes frame-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes frame-shine {
+  0% {
+    transform: translateX(-130%) rotate(14deg);
+  }
+  55%,
+  100% {
+    transform: translateX(230%) rotate(14deg);
+  }
+}
+
+@keyframes frame-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.frame-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.frame-ring__gradient {
+  position: absolute;
+  inset: -50%;
+  animation: frame-spin var(--frame-speed, 5s) linear infinite;
+  will-change: transform;
+}
+
+.frame-ring__shine {
+  position: absolute;
+  inset: -20% -60%;
+  z-index: 2;
+  background: linear-gradient(
+    75deg,
+    transparent 42%,
+    rgba(255, 255, 255, 0.62) 50%,
+    transparent 58%
+  );
+  mix-blend-mode: screen;
+  animation: frame-shine var(--shine-speed, 6s) ease-in-out infinite;
+  pointer-events: none;
+}
+
+.frame-ring__inner {
+  position: relative;
+  z-index: 3;
+  overflow: hidden;
+  background: var(--color-ink);
+}
+
+/* Üye: sade, hareketsiz */
+.frame-ring--member .frame-ring__gradient {
+  inset: 0;
+  animation: none;
+  background: linear-gradient(160deg, #39414f, #1b2130);
+}
+
+/* Onaylı satıcı */
+.frame-ring--verified_seller .frame-ring__gradient {
+  background: conic-gradient(from 0deg, #35d49a, #6ee7b7, #0f9d6e, #35d49a);
+}
+.frame-ring--verified_seller {
+  box-shadow: 0 0 10px rgba(53, 212, 154, 0.28);
+}
+
+/* VIP */
+.frame-ring--vip .frame-ring__gradient {
+  background: conic-gradient(from 0deg, #ffd166, #ff8a1f, #fff3c4, #ffb057, #ffd166);
+}
+.frame-ring--vip {
+  box-shadow: 0 0 14px rgba(255, 180, 60, 0.45);
+}
+
+/* Premium */
+.frame-ring--premium .frame-ring__gradient {
+  background: conic-gradient(from 0deg, #c084fc, #f472b6, #7c3aed, #e9d5ff, #c084fc);
+}
+.frame-ring--premium {
+  box-shadow: 0 0 14px rgba(192, 132, 252, 0.45);
+}
+
+/* Moderatör */
+.frame-ring--moderator .frame-ring__gradient {
+  background: conic-gradient(from 0deg, #22d3ee, #3b82f6, #a855f7, #67e8f9, #22d3ee);
+}
+.frame-ring--moderator {
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.5);
+}
+
+/* Kurucu: en havalısı */
+.frame-ring--owner .frame-ring__gradient {
+  background: conic-gradient(
+    from 0deg,
+    #ffd166,
+    #ff8a1f,
+    #ff2d95,
+    #a855f7,
+    #22d3ee,
+    #35d49a,
+    #ffd166
+  );
+}
+.frame-ring--owner {
+  box-shadow:
+    0 0 18px rgba(255, 138, 31, 0.55),
+    0 0 34px rgba(255, 45, 149, 0.32);
+}
+.frame-ring--owner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.16), transparent 62%);
+  animation: frame-pulse 3.2s ease-in-out infinite;
+  pointer-events: none;
+}

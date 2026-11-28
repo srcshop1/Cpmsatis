@@ -1996,6 +1996,151 @@ begin
 end; $$;
 grant execute on function public.purge_expired_listings() to authenticated;
 
+-- ---------- 5aa) GÖRÜNTÜLENME + YENİLEME SINIRI + ÖNE ÇIKARMA LİMİTİ ----------
+-- Bir kişi bir ilana ömrü boyunca 1 görüntülenme verir.
+create table if not exists public.listing_views (
+  listing_id uuid not null references public.listings (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (listing_id, user_id)
+);
+alter table public.listing_views enable row level security;
+
+create or replace function public.register_listing_view(p_listing uuid)
+returns integer language plpgsql security definer set search_path = public as $$
+declare
+  v_uid uuid := auth.uid();
+  v_owner uuid;
+  v_count integer;
+  v_new boolean := false;
+begin
+  select seller_id, coalesce(view_count, 0) into v_owner, v_count
+    from public.listings where id = p_listing;
+  if v_owner is null then return 0; end if;
+
+  -- Kendi ilanına bakan sayılmaz
+  if v_uid is not null and v_uid = v_owner then
+    return v_count;
+  end if;
+
+  if v_uid is null then
+    update public.listings set view_count = coalesce(view_count, 0) + 1
+     where id = p_listing
+    returning view_count into v_count;
+    return coalesce(v_count, 0);
+  end if;
+
+  insert into public.listing_views (listing_id, user_id)
+  values (p_listing, v_uid)
+  on conflict (listing_id, user_id) do nothing;
+  v_new := found;
+
+  if v_new then
+    update public.listings set view_count = coalesce(view_count, 0) + 1
+     where id = p_listing
+    returning view_count into v_count;
+  end if;
+
+  return coalesce(v_count, 0);
+end; $$;
+grant execute on function public.register_listing_view(uuid) to anon, authenticated;
+
+-- Yenileme: yalnızca son 1 gün kaldığında veya süresi dolduğunda
+create or replace function public.renew_listing(p_listing uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_created timestamptz;
+begin
+  select created_at into v_created
+    from public.listings where id = p_listing and seller_id = auth.uid();
+
+  if v_created is null then
+    raise exception 'Bu ilanın sahibi değilsin';
+  end if;
+  if public.ban_active(auth.uid()) then
+    raise exception 'Hesabın askıda olduğu için ilan yenilenemez';
+  end if;
+  if v_created > now() - interval '14 days' then
+    raise exception 'İlanın süresi dolmadan yenileyemezsin. Son 1 gün kaldığında yenileyebilirsin.';
+  end if;
+
+  update public.listings
+     set created_at = now(),
+         status = 'active',
+         expired_at = null,
+         featured_requested = false
+   where id = p_listing;
+end; $$;
+grant execute on function public.renew_listing(uuid) to authenticated;
+
+-- Öne çıkarma talebi: ilan başına sınır + talepler arası bekleme
+create or replace function public.request_featured(p_listing uuid, p_days integer default 7)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_uid uuid := auth.uid();
+  v_owner uuid;
+  v_role text;
+  v_tier text;
+  v_max integer := 2;
+  v_cooldown interval := interval '24 hours';
+  v_used integer;
+  v_pending boolean;
+  v_last timestamptz;
+  v_left interval;
+begin
+  if v_uid is null then raise exception 'Giriş yapmalısın'; end if;
+
+  select seller_id into v_owner from public.listings where id = p_listing;
+  if v_owner is null then raise exception 'İlan bulunamadı'; end if;
+  if v_owner <> v_uid then raise exception 'Bu ilanın sahibi değilsin'; end if;
+  if public.ban_active(v_uid) then raise exception 'Hesabın askıda olduğu için talep gönderemezsin'; end if;
+
+  v_role := public.my_staff_role();
+
+  select case
+    when exists (select 1 from public.user_tags where user_id = v_uid and tag = 'vip') then 'vip'
+    when exists (select 1 from public.user_tags where user_id = v_uid and tag = 'premium') then 'premium'
+    else 'normal'
+  end into v_tier;
+
+  if v_role is not null then
+    v_max := 10;
+    v_cooldown := interval '0 hours';
+  elsif v_tier = 'vip' then
+    v_max := 3;
+    v_cooldown := interval '18 hours';
+  elsif v_tier = 'premium' then
+    v_max := 2;
+    v_cooldown := interval '20 hours';
+  end if;
+
+  select exists (
+    select 1 from public.featured_requests
+     where listing_id = p_listing and status = 'pending'
+  ) into v_pending;
+  if v_pending then
+    raise exception 'Bu ilan için onay bekleyen bir talebin var';
+  end if;
+
+  select count(*) into v_used
+    from public.featured_requests where listing_id = p_listing;
+  if v_used >= v_max then
+    raise exception 'Bu ilan için en fazla % kez öne çıkarma talebi gönderebilirsin', v_max;
+  end if;
+
+  select max(created_at) into v_last
+    from public.featured_requests where seller_id = v_uid;
+  if v_last is not null and now() - v_last < v_cooldown then
+    v_left := v_cooldown - (now() - v_last);
+    raise exception 'Yeni talep için beklemen gerekiyor. Kalan süre: % saat',
+      greatest(1, ceil(extract(epoch from v_left) / 3600)::integer);
+  end if;
+
+  insert into public.featured_requests (listing_id, seller_id, days)
+  values (p_listing, v_uid, p_days);
+end; $$;
+grant execute on function public.request_featured(uuid, integer) to authenticated;
+
+
 
 
 -- Satış sayılırken ek sinyal: son 30 günde yeni hesaplardan gelen işlemler

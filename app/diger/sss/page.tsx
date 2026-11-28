@@ -35,8 +35,16 @@ const faqs = [
     a: "İlan fiyatı en fazla 50.000.000 TL girilebilir. Fiyat bilgilendirme amaçlıdır; sitede tahsilat yapılmaz.",
   },
   {
+    q: "İlanım ne kadar yayında kalır?",
+    a: "İlanın 15 gün yayında kalır. Süre bitince listeden kalkar; kaldırılmadan önceki son 1 günde 'Yenile' butonu açılır ve tek dokunuşla 15 gün daha yayında kalır. Yenilemezsen ilan 2 gün sonra silinir; satışı olan ilanlar silinmez.",
+  },
+  {
+    q: "Görüntülenme nasıl sayılıyor?",
+    a: "Bir kişi bir ilana ömrü boyunca yalnızca 1 görüntülenme verir; aynı ilana kaç kez girerse girsin sayı artmaz. Satıcının kendi görüntülemeleri sayılmaz.",
+  },
+  {
     q: "İlanımı öne çıkarabilir miyim?",
-    a: "Evet. İlanından 'Öne Çıkar' talebi gönderirsin. VIP ve Premium üyelerin aylık ücretsiz hakkı vardır; diğer talepler yetkili onayından geçer.",
+    a: "Evet. İlanından 'Öne Çıkarma Talebi Gönder' butonuna basarsın, talep yetkili onayına düşer. Bir ilanda en fazla 2 kez talep gönderebilirsin (VIP üyelerde 3). Yeni bir talep için son talebinden sonra en az 24 saat geçmesi gerekir (Premium 20 saat, VIP 18 saat).",
   },
   {
     q: "Onaylı Satıcı nasıl olunur?",
