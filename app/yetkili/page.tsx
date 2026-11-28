@@ -57,23 +57,79 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "Reddedildi",
 };
 
-const TABS: { key: Tab; label: string; ownerOnly?: boolean }[] = [
-  { key: "tickets", label: "Destek" },
-  { key: "applications", label: "Onaylı Satıcı" },
-  { key: "featured", label: "Öne Çıkar" },
-  { key: "reports", label: "Bildiriler" },
-  { key: "listings", label: "İlanlar" },
-  { key: "members", label: "Üyeler" },
-  { key: "usersDetails", label: "Kullanıcı Verileri" },
-  { key: "reviewRemove", label: "Değerlendirme Kaldır" },
-  { key: "frames", label: "Çerçeve Ver" },
-  { key: "notify", label: "Bildirim Gönder" },
-  { key: "sales", label: "Satışlar" },
-  { key: "tags", label: "Tag Ver" },
-  { key: "profileEdit", label: "Profil Düzenle", ownerOnly: true },
-  { key: "roles", label: "Moderatör", ownerOnly: true },
-  { key: "announce", label: "Duyuru", ownerOnly: true },
-  { key: "stats", label: "İstatistik" },
+type TabGroup = {
+  key: string;
+  label: string;
+  ownerOnly?: boolean;
+  tabs: { key: Tab; label: string }[];
+};
+
+/** Az sayıda ana kategori; her birinin içinde alt sekmeler var */
+const TAB_GROUPS: TabGroup[] = [
+  {
+    key: "support",
+    label: "Destek & Şikayet",
+    tabs: [
+      { key: "tickets", label: "Destek" },
+      { key: "reports", label: "Şikayetler" },
+    ],
+  },
+  {
+    key: "listings",
+    label: "İlanlar",
+    tabs: [
+      { key: "listings", label: "Tüm ilanlar" },
+      { key: "featured", label: "Öne çıkan" },
+    ],
+  },
+  {
+    key: "members",
+    label: "Üyeler",
+    tabs: [
+      { key: "members", label: "Üyeler" },
+      { key: "usersDetails", label: "Kullanıcı verileri" },
+    ],
+  },
+  {
+    key: "sales",
+    label: "Satışlar",
+    tabs: [{ key: "sales", label: "Satışlar" }],
+  },
+  {
+    key: "reviews",
+    label: "Değerlendirme",
+    tabs: [{ key: "reviewRemove", label: "İnceleme & kaldırma" }],
+  },
+  {
+    key: "decor",
+    label: "Çerçeve & Rozet",
+    ownerOnly: true,
+    tabs: [
+      { key: "frames", label: "Çerçeve" },
+      { key: "tags", label: "Rozet" },
+    ],
+  },
+  {
+    key: "applications",
+    label: "Onaylı Satıcı",
+    tabs: [{ key: "applications", label: "Başvurular" }],
+  },
+  {
+    key: "notify",
+    label: "Bildirim",
+    tabs: [{ key: "notify", label: "Gönder" }],
+  },
+  {
+    key: "owner",
+    label: "Kurucu",
+    ownerOnly: true,
+    tabs: [
+      { key: "stats", label: "İstatistik" },
+      { key: "roles", label: "Moderatör" },
+      { key: "announce", label: "Duyuru" },
+      { key: "profileEdit", label: "Profil düzenle" },
+    ],
+  },
 ];
 
 type Ticket = {
@@ -171,6 +227,7 @@ export default function AdminPage() {
   const [detailUser, setDetailUser] = useState<string | null>(null);
   const [frameQuery, setFrameQuery] = useState("");
   const [frameChoice, setFrameChoice] = useState("vip");
+  const [frameMode, setFrameMode] = useState<"give" | "take">("give");
   const [confirmUser, setConfirmUser] = useState<MemberRow | null>(null);
   const [banTarget, setBanTarget] = useState<MemberRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -1149,7 +1206,8 @@ export default function AdminPage() {
     );
   }
 
-  const visibleTabs = TABS.filter((item) => !item.ownerOnly || role === "owner");
+  const visibleGroups = TAB_GROUPS.filter((group) => !group.ownerOnly || role === "owner");
+  const activeGroup = visibleGroups.find((group) => group.tabs.some((item) => item.key === tab));
 
   return (
     <AppShell>
@@ -1199,17 +1257,36 @@ export default function AdminPage() {
       )}
 
       <div className="mt-4 -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-        {visibleTabs.map((item) => (
+        {visibleGroups.map((group) => (
           <button
-            key={item.key}
+            key={group.key}
             type="button"
-            onClick={() => setTab(item.key)}
-            className={`chip whitespace-nowrap ${tab === item.key ? "chip-active" : ""}`}
+            onClick={() => setTab(group.tabs[0].key)}
+            className={`chip whitespace-nowrap ${
+              activeGroup?.key === group.key ? "chip-active" : ""
+            }`}
           >
-            {item.label}
+            {group.label}
           </button>
         ))}
       </div>
+
+      {activeGroup && activeGroup.tabs.length > 1 && (
+        <div className="mt-2 flex gap-1.5 rounded-xl border border-line-soft bg-white/3 p-1">
+          {activeGroup.tabs.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setTab(item.key)}
+              className={`flex-1 rounded-lg px-2 py-1.5 text-[0.68rem] font-semibold transition ${
+                tab === item.key ? "bg-accent/15 text-accent" : "text-muted hover:text-text"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="mt-4 space-y-3">
         {tab === "tickets" && (
@@ -1962,50 +2039,87 @@ export default function AdminPage() {
 
         {tab === "profileEdit" && role === "owner" && <ProfileEditor />}
 
-        {tab === "frames" && (
+        {tab === "frames" && role === "owner" && (
           <div className="card p-4">
-            <h2 className="text-sm font-bold">Çerçeve Ver</h2>
+            <h2 className="text-sm font-bold">Çerçeve</h2>
             <p className="mt-1 text-[0.7rem] text-muted-2">
-              Kullanıcı adı veya e-posta yaz, çerçeve seç. Verilen çerçeve kişinin profilinde
-              seçilebilir olur.
+              Kullanıcı adı veya e-posta yaz, çerçeve seç. Verirsen kişi o çerçeveyi takabilir,
+              alırsan kişiden kalkar.
             </p>
+
+            <div className="mt-3 flex gap-1.5 rounded-xl border border-line-soft bg-white/3 p-1">
+              {[
+                { key: "give" as const, label: "Çerçeve Ver" },
+                { key: "take" as const, label: "Çerçeve Al" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setFrameMode(item.key)}
+                  className={`flex-1 rounded-lg px-2 py-1.5 text-[0.7rem] font-semibold transition ${
+                    frameMode === item.key ? "bg-accent/15 text-accent" : "text-muted hover:text-text"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
             <input
               className="field mt-3"
               value={frameQuery}
               onChange={(event) => setFrameQuery(event.target.value)}
               placeholder="kullanıcı adı veya e-posta"
             />
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {frameList.map((frame) => (
-                <button
-                  key={frame.slug}
-                  type="button"
-                  onClick={() => setFrameChoice(frame.slug)}
-                  className={`chip ${frameChoice === frame.slug ? "chip-active" : ""}`}
-                >
-                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-gradient-to-br from-accent to-accent-deep" />
-                  {frame.name}
-                </button>
-              ))}
+
+            <p className="mt-3 text-[0.62rem] font-semibold uppercase tracking-wide text-muted-2">
+              Tag çerçeveleri
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {frameList
+                .filter((frame) => frame.category === "tag")
+                .map((frame) => (
+                  <button
+                    key={frame.slug}
+                    type="button"
+                    onClick={() => setFrameChoice(frame.slug)}
+                    className={`chip ${frameChoice === frame.slug ? "chip-active" : ""}`}
+                  >
+                    {frame.name}
+                  </button>
+                ))}
             </div>
-            <div className="mt-3 flex gap-2">
-              <button
-                type="button"
-                onClick={() => grantFrame(false)}
-                disabled={busy === "frame"}
-                className="btn btn-primary h-10 flex-1 text-sm"
-              >
-                {busy === "frame" ? <Spinner /> : "Çerçeve Ver"}
-              </button>
-              <button
-                type="button"
-                onClick={() => grantFrame(true)}
-                disabled={busy === "frame"}
-                className="btn btn-ghost h-10 flex-1 text-sm"
-              >
-                Kaldır
-              </button>
+
+            <p className="mt-3 text-[0.62rem] font-semibold uppercase tracking-wide text-muted-2">
+              Başarı çerçeveleri
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {frameList
+                .filter((frame) => frame.category === "achievement")
+                .map((frame) => (
+                  <button
+                    key={frame.slug}
+                    type="button"
+                    onClick={() => setFrameChoice(frame.slug)}
+                    className={`chip ${frameChoice === frame.slug ? "chip-active" : ""}`}
+                  >
+                    {frame.name}
+                  </button>
+                ))}
             </div>
+
+            <button
+              type="button"
+              onClick={() => grantFrame(frameMode === "take")}
+              disabled={busy === "frame"}
+              className={`mt-4 h-10 w-full rounded-xl text-sm font-semibold transition disabled:opacity-60 ${
+                frameMode === "take"
+                  ? "border border-danger/35 bg-danger/10 text-[#ffb3bb] hover:bg-danger/18"
+                  : "btn btn-primary"
+              }`}
+            >
+              {busy === "frame" ? <Spinner /> : frameMode === "take" ? "Çerçeveyi Al" : "Çerçeve Ver"}
+            </button>
           </div>
         )}
 

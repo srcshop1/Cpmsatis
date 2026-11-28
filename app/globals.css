@@ -309,7 +309,9 @@ body {
   background: conic-gradient(from 0deg, #35d49a, #a7f3d0, #0f9d6e, #6ee7b7, #35d49a);
 }
 .frame-ring--mint {
-  box-shadow: 0 0 12px rgba(53, 212, 154, 0.4);
+  box-shadow:
+    0 0 14px rgba(53, 212, 154, 0.55),
+    0 0 24px rgba(53, 212, 154, 0.25);
 }
 
 /* Premium: mor-pembe (VIP'in bir tık altı) */
@@ -317,7 +319,9 @@ body {
   background: conic-gradient(from 0deg, #a855f7, #f0abfc, #7c3aed, #c084fc, #a855f7);
 }
 .frame-ring--violet {
-  box-shadow: 0 0 13px rgba(168, 85, 247, 0.42);
+  box-shadow:
+    0 0 15px rgba(168, 85, 247, 0.55),
+    0 0 26px rgba(168, 85, 247, 0.25);
 }
 
 /* VIP: altın, premiumdan parlak */
@@ -326,8 +330,8 @@ body {
 }
 .frame-ring--gold {
   box-shadow:
-    0 0 16px rgba(255, 200, 70, 0.55),
-    0 0 28px rgba(255, 138, 31, 0.3);
+    0 0 20px rgba(255, 200, 70, 0.7),
+    0 0 36px rgba(255, 138, 31, 0.4);
 }
 .frame-ring--gold::after {
   content: "";
@@ -344,7 +348,9 @@ body {
   background: conic-gradient(from 0deg, #22d3ee, #3b82f6, #a855f7, #67e8f9, #22d3ee);
 }
 .frame-ring--blue {
-  box-shadow: 0 0 16px rgba(59, 130, 246, 0.5);
+  box-shadow:
+    0 0 18px rgba(59, 130, 246, 0.62),
+    0 0 30px rgba(34, 211, 238, 0.28);
 }
 
 /* Kurucu: en havalısı */
@@ -362,8 +368,9 @@ body {
 }
 .frame-ring--rainbow {
   box-shadow:
-    0 0 18px rgba(255, 138, 31, 0.55),
-    0 0 34px rgba(255, 45, 149, 0.32);
+    0 0 22px rgba(255, 138, 31, 0.7),
+    0 0 44px rgba(255, 45, 149, 0.42),
+    0 0 60px rgba(34, 211, 238, 0.22);
 }
 .frame-ring--rainbow::after {
   content: "";
@@ -380,56 +387,56 @@ body {
   background: conic-gradient(from 0deg, #e0a370, #b87333, #8b5a2b, #f0c9a0, #b87333);
 }
 .frame-ring--bronze {
-  box-shadow: 0 0 10px rgba(184, 115, 51, 0.4);
+  box-shadow: 0 0 10px rgba(184, 115, 51, 0.22);
 }
 
 .frame-ring--silver .frame-ring__gradient {
   background: conic-gradient(from 0deg, #e2e8f0, #94a3b8, #cbd5e1, #64748b, #e2e8f0);
 }
 .frame-ring--silver {
-  box-shadow: 0 0 10px rgba(203, 213, 225, 0.4);
+  box-shadow: 0 0 10px rgba(203, 213, 225, 0.22);
 }
 
 .frame-ring--gold-soft .frame-ring__gradient {
   background: conic-gradient(from 0deg, #ffd166, #ffe9a8, #e5a13a, #ffd166);
 }
 .frame-ring--gold-soft {
-  box-shadow: 0 0 10px rgba(255, 209, 102, 0.38);
+  box-shadow: 0 0 10px rgba(255, 209, 102, 0.2);
 }
 
 .frame-ring--emerald .frame-ring__gradient {
   background: conic-gradient(from 0deg, #34d399, #a7f3d0, #059669, #6ee7b7, #34d399);
 }
 .frame-ring--emerald {
-  box-shadow: 0 0 12px rgba(52, 211, 153, 0.42);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.22);
 }
 
 .frame-ring--cyan .frame-ring__gradient {
   background: conic-gradient(from 0deg, #22d3ee, #a5f3fc, #0ea5e9, #67e8f9, #22d3ee);
 }
 .frame-ring--cyan {
-  box-shadow: 0 0 12px rgba(34, 211, 238, 0.42);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.22);
 }
 
 .frame-ring--ice .frame-ring__gradient {
   background: conic-gradient(from 0deg, #bae6fd, #f0f9ff, #38bdf8, #7dd3fc, #bae6fd);
 }
 .frame-ring--ice {
-  box-shadow: 0 0 14px rgba(125, 211, 252, 0.5);
+  box-shadow: 0 0 14px rgba(125, 211, 252, 0.24);
 }
 
 .frame-ring--magenta .frame-ring__gradient {
   background: conic-gradient(from 0deg, #f472b6, #fbcfe8, #db2777, #f9a8d4, #f472b6);
 }
 .frame-ring--magenta {
-  box-shadow: 0 0 13px rgba(244, 114, 182, 0.45);
+  box-shadow: 0 0 13px rgba(244, 114, 182, 0.24);
 }
 
 .frame-ring--sunset .frame-ring__gradient {
   background: conic-gradient(from 0deg, #fb923c, #fda4af, #f43f5e, #fdba74, #fb923c);
 }
 .frame-ring--sunset {
-  box-shadow: 0 0 12px rgba(251, 146, 60, 0.42);
+  box-shadow: 0 0 12px rgba(251, 146, 60, 0.22);
 }
 
 .frame-ring--royal .frame-ring__gradient {
@@ -437,6 +444,6 @@ body {
 }
 .frame-ring--royal {
   box-shadow:
-    0 0 16px rgba(167, 139, 250, 0.55),
-    0 0 26px rgba(109, 40, 217, 0.3);
+    0 0 16px rgba(167, 139, 250, 0.3),
+    0 0 20px rgba(109, 40, 217, 0.16);
 }

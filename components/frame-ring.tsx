@@ -5,20 +5,22 @@ import { findFrame } from "@/lib/frames";
 
 /** Tema başına halka kalınlığı, dönüş hızı ve ışık efekti */
 const THEMES: Record<string, { ring: number; speed: string; shine: string; shineOn: boolean }> = {
-  rainbow: { ring: 3, speed: "3.2s", shine: "4.2s", shineOn: true },
-  blue: { ring: 2.5, speed: "4.4s", shine: "5.2s", shineOn: true },
-  gold: { ring: 2.5, speed: "4.6s", shine: "4.8s", shineOn: true },
-  violet: { ring: 2.4, speed: "6.2s", shine: "6.4s", shineOn: true },
-  mint: { ring: 2.2, speed: "5.6s", shine: "6.6s", shineOn: true },
-  royal: { ring: 2.4, speed: "4.8s", shine: "5s", shineOn: true },
-  emerald: { ring: 2.2, speed: "5.4s", shine: "6s", shineOn: true },
-  ice: { ring: 2.2, speed: "5s", shine: "5.4s", shineOn: true },
-  cyan: { ring: 2.2, speed: "5.2s", shine: "5.8s", shineOn: true },
-  magenta: { ring: 2.2, speed: "5.6s", shine: "6.2s", shineOn: true },
-  sunset: { ring: 2.2, speed: "5.8s", shine: "6.4s", shineOn: true },
-  "gold-soft": { ring: 2.2, speed: "6s", shine: "6.8s", shineOn: true },
-  silver: { ring: 2, speed: "6.4s", shine: "7s", shineOn: true },
-  bronze: { ring: 2, speed: "6.8s", shine: "7.4s", shineOn: true },
+  // Tag çerçeveleri: parlak, kalın, hızlı (kurucu en üstün)
+  rainbow: { ring: 3.4, speed: "3s", shine: "3.8s", shineOn: true },
+  blue: { ring: 3, speed: "4s", shine: "4.6s", shineOn: true },
+  gold: { ring: 3, speed: "4.2s", shine: "4.4s", shineOn: true },
+  violet: { ring: 2.8, speed: "5s", shine: "5.4s", shineOn: true },
+  mint: { ring: 2.6, speed: "5.2s", shine: "6s", shineOn: true },
+  // Başarı çerçeveleri: ince, sakin, ışıksız
+  royal: { ring: 1.8, speed: "9s", shine: "0s", shineOn: false },
+  emerald: { ring: 1.8, speed: "9.5s", shine: "0s", shineOn: false },
+  ice: { ring: 1.8, speed: "10s", shine: "0s", shineOn: false },
+  cyan: { ring: 1.8, speed: "10s", shine: "0s", shineOn: false },
+  magenta: { ring: 1.8, speed: "10.5s", shine: "0s", shineOn: false },
+  sunset: { ring: 1.8, speed: "11s", shine: "0s", shineOn: false },
+  "gold-soft": { ring: 1.8, speed: "11s", shine: "0s", shineOn: false },
+  silver: { ring: 1.7, speed: "12s", shine: "0s", shineOn: false },
+  bronze: { ring: 1.7, speed: "12s", shine: "0s", shineOn: false },
   plain: { ring: 1.5, speed: "0s", shine: "0s", shineOn: false },
 };
 
