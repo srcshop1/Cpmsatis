@@ -91,6 +91,8 @@ export function ListingsClient() {
       // 15 günü dolan ilanları gizle
       await expireListings(supabase);
       await purgeExpiredListings(supabase);
+      // Süresi dolmak üzere olan ilanların sahiplerine hatırlatma bırak
+      await supabase.rpc("notify_expiring_listings");
 
       const { listings: rows, error } = await fetchListings(supabase, {
         query: (new URLSearchParams(filtersKey).get("q") ?? "").trim(),
