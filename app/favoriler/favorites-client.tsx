@@ -65,7 +65,7 @@ export function FavoritesClient() {
           <p className="text-sm font-semibold">Favorilerini görmek için giriş yap</p>
           <p className="mt-1 text-xs text-muted-2">Beğendiğin ilanları kaydet, sonra buradan aç.</p>
           <Link href="/giris" className="btn btn-primary mt-4 h-10 px-5 text-sm">
-            Giriş Yap
+            Giriş yap
           </Link>
         </div>
       )}

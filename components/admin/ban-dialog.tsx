@@ -142,7 +142,7 @@ export function BanDialog({
             disabled={busy || invalid}
             className="btn btn-primary h-10 flex-1 text-sm disabled:opacity-60"
           >
-            {busy ? "…" : "Askıya Al"}
+            {busy ? "…" : "Askıya al"}
           </button>
         </div>
       </div>

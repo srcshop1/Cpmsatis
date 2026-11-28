@@ -23,7 +23,7 @@ export function LoginPageClient() {
   return (
     <AuthShell
       eyebrow="Tekrar hoş geldin"
-      title="Giriş Yap"
+      title="Giriş yap"
       subtitle="Kullanıcı adın veya e-posta adresinle saniyeler içinde devam et."
     >
       <DemoBanner />

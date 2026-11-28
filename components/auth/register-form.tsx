@@ -95,7 +95,7 @@ export function RegisterForm({ nextPath }: { nextPath?: string }) {
 
   return (
     <div className="space-y-4">
-      <GoogleButton label="Google ile Kayıt Ol" nextPath={nextPath} />
+      <GoogleButton label="Google ile kayıt ol" nextPath={nextPath} />
 
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-line" />
@@ -117,7 +117,7 @@ export function RegisterForm({ nextPath }: { nextPath?: string }) {
 
       <TextField
         name="username"
-        label="Kullanıcı Adı"
+        label="Kullanıcı adı"
         placeholder="ör. oyuncu34"
         autoComplete="username"
         autoCapitalize="none"
@@ -199,7 +199,7 @@ export function RegisterForm({ nextPath }: { nextPath?: string }) {
             <Spinner /> Kayıt olunuyor…
           </>
         ) : (
-          "Kayıt Ol"
+          "Kayıt ol"
         )}
       </button>
 
@@ -214,7 +214,7 @@ export function RegisterForm({ nextPath }: { nextPath?: string }) {
           href={nextPath ? `/giris?next=${encodeURIComponent(nextPath)}` : "/giris"}
           className="font-semibold text-accent hover:text-accent-soft"
         >
-          Giriş Yap
+          Giriş yap
         </Link>
       </p>
     </form>

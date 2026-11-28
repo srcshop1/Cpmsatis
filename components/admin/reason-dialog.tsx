@@ -97,7 +97,7 @@ export function ReasonDialog({
           )}
 
           <label className="mt-3 block text-[0.7rem] font-semibold text-muted-2">
-            {options ? "Yetkili Notu" : "Yetkili Mesajı"}
+            {options ? "Yetkili notu" : "Yetkili mesajı"}
           </label>
           <textarea
             value={note}

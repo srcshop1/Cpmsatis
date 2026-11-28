@@ -63,7 +63,7 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
 
   return (
     <div className="space-y-4">
-      <GoogleButton label="Google ile Giriş Yap" nextPath={nextPath} />
+      <GoogleButton label="Google ile giriş yap" nextPath={nextPath} />
 
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-line" />
@@ -85,7 +85,7 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
 
       <TextField
         name="identifier"
-        label="Kullanıcı Adı veya E-Posta Adresi"
+        label="Kullanıcı adı veya e-posta adresi"
         placeholder="oyuncu34 veya ornek@mail.com"
         autoComplete="username"
         autoCapitalize="none"
@@ -127,7 +127,7 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
             <Spinner /> Giriş yapılıyor…
           </>
         ) : (
-          "Giriş Yap"
+          "Giriş yap"
         )}
       </button>
 

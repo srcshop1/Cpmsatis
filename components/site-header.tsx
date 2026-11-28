@@ -145,10 +145,10 @@ export function SiteHeader() {
           ) : (
             <>
               <Link href="/giris" className="btn btn-ghost h-9 px-3.5 text-sm">
-                Giriş Yap
+                Giriş yap
               </Link>
               <Link href="/kayit" className="btn btn-primary h-9 px-3.5 text-sm">
-                <span className="hidden sm:inline">Ücretsiz </span>Kayıt Ol
+                <span className="hidden sm:inline">Ücretsiz </span>Kayıt ol
               </Link>
             </>
           )}
