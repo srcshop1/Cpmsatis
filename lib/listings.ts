@@ -90,6 +90,36 @@ export async function renewListing(supabase: SupabaseClient, listingId: string) 
   return { error: null };
 }
 
+/** 15 günü dolup 2 günü de geçen (satışı olmayan) ilanları siler */
+export async function purgeExpiredListings(supabase: SupabaseClient) {
+  await supabase.rpc("purge_expired_listings");
+}
+
+export type ExpiredListing = {
+  id: string;
+  title: string;
+  price: number;
+  expired_at: string;
+};
+
+/** Süresi dolmuş (gizlenmiş) kendi ilanları */
+export async function loadExpiredListings(
+  supabase: SupabaseClient,
+  sellerId: string,
+): Promise<ExpiredListing[]> {
+  const { data, error } = await supabase
+    .from(LISTINGS_TABLE)
+    .select("id, title, price, expired_at")
+    .eq("seller_id", sellerId)
+    .eq("status", "hidden")
+    .not("expired_at", "is", null)
+    .order("expired_at", { ascending: false })
+    .limit(30);
+
+  if (error) return [];
+  return (data ?? []) as unknown as ExpiredListing[];
+}
+
 function isSellerOnline(seller: ListingSeller | null) {
   if (!seller?.last_seen_at) return false;
   const diff = Date.now() - new Date(seller.last_seen_at).getTime();

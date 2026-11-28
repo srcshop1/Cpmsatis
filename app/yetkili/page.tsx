@@ -203,6 +203,14 @@ export default function AdminPage() {
   const [featureDays, setFeatureDays] = useState("3");
   const [featurePick, setFeaturePick] = useState<ListingRow | null>(null);
   const [stats, setStats] = useState<Record<string, number>>({});
+  const [summary, setSummary] = useState<{
+    newListings: number;
+    newUsers: number;
+    openTickets: number;
+    openReports: number;
+    pendingReviews: number;
+    suspectSales: number;
+  } | null>(null);
   const [reviewMember, setReviewMember] = useState<MemberHit | null>(null);
   const [closeReportTarget, setCloseReportTarget] = useState<Report | null>(null);
   const [selectedListings, setSelectedListings] = useState<string[]>([]);
@@ -444,6 +452,55 @@ export default function AdminPage() {
   useEffect(() => {
     if (role) void loadTab();
   }, [role, loadTab]);
+
+  // Günün özeti: panel açılır açılmaz tek bakışta durum
+  useEffect(() => {
+    if (!supabase || !role) return;
+    let cancelled = false;
+    const dayAgo = new Date(Date.now() - 86400000).toISOString();
+
+    void (async () => {
+      const [newListings, newUsers, openTickets, openReports, pendingReviews, suspectSales] =
+        await Promise.all([
+          supabase
+            .from("listings")
+            .select("id", { count: "exact", head: true })
+            .gte("created_at", dayAgo),
+          supabase
+            .from("profiles")
+            .select("id", { count: "exact", head: true })
+            .gte("created_at", dayAgo),
+          supabase
+            .from("support_tickets")
+            .select("id", { count: "exact", head: true })
+            .neq("status", "closed"),
+          supabase.from("reports").select("id", { count: "exact", head: true }).neq("status", "closed"),
+          supabase
+            .from("reviews")
+            .select("id", { count: "exact", head: true })
+            .neq("status", "approved"),
+          supabase
+            .from("sales")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "approved")
+            .eq("counted", false),
+        ]);
+
+      if (cancelled) return;
+      setSummary({
+        newListings: newListings.count ?? 0,
+        newUsers: newUsers.count ?? 0,
+        openTickets: openTickets.count ?? 0,
+        openReports: openReports.count ?? 0,
+        pendingReviews: pendingReviews.count ?? 0,
+        suspectSales: suspectSales.count ?? 0,
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, role]);
 
   /** Kişinin bildirim kutusuna site içi bildirim bırakır */
   async function sendNotification(
@@ -1111,6 +1168,33 @@ export default function AdminPage() {
       {notice && (
         <div className="mt-3 rounded-xl border border-line bg-white/4 px-3.5 py-2.5 text-xs text-muted">
           {notice}
+        </div>
+      )}
+
+      {summary && (
+        <div className="mt-3 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+          {[
+            { label: "Bugün ilan", value: summary.newListings, tab: "listings" as Tab },
+            { label: "Bugün üye", value: summary.newUsers, tab: "members" as Tab },
+            { label: "Destek", value: summary.openTickets, tab: "tickets" as Tab },
+            { label: "Bildiri", value: summary.openReports, tab: "reports" as Tab },
+            { label: "İncelemede", value: summary.pendingReviews, tab: "reviewRemove" as Tab },
+            { label: "Sayılmayan", value: summary.suspectSales, tab: "sales" as Tab },
+          ].map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => setTab(item.tab)}
+              className={`rounded-xl border px-2 py-2 text-left transition ${
+                item.value > 0
+                  ? "border-accent/35 bg-accent/8 hover:bg-accent/12"
+                  : "border-line bg-white/3 hover:bg-white/6"
+              }`}
+            >
+              <span className="block text-[0.85rem] font-extrabold leading-none">{item.value}</span>
+              <span className="mt-1 block text-[0.58rem] leading-tight text-muted-2">{item.label}</span>
+            </button>
+          ))}
         </div>
       )}
 

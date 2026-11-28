@@ -613,7 +613,8 @@ export function ListingDetailClient() {
                 {listingExpiresAt(listing.created_at).toLocaleDateString("tr-TR")} tarihinde kalkar
               </span>
               <span className="inline-flex items-center gap-1">
-                <EyeIcon width={12} height={12} /> {views} görüntülenme
+                <EyeIcon width={12} height={12} />
+                {views >= 10 ? `${views} kişi baktı` : "İlk bakanlardan biri ol"}
               </span>
               <span className="inline-flex items-center gap-1">
                 <HeartIcon width={12} height={12} /> {favorites} favori

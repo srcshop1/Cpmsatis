@@ -28,11 +28,20 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     title: `${SITE_NAME} — CPM araç, çizim ve hesap alım-satımı`,
     description: SITE_DESC,
+    images: [
+      {
+        url: `${SITE_URL}/og.png`,
+        width: 1200,
+        height: 630,
+        alt: "CPM Satış — CPM araç, çizim ve hesap alım satımı",
+      },
+    ],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: `${SITE_NAME} — CPM ilan pazarı`,
     description: SITE_DESC,
+    images: [`${SITE_URL}/og.png`],
   },
   robots: { index: true, follow: true },
   manifest: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/manifest.webmanifest`,

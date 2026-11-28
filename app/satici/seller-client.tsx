@@ -19,9 +19,13 @@ import {
 import { ListingCard } from "@/components/listing-card";
 import { FramedAvatar, StaffBadge, TagBadge, VerifiedBadge } from "@/components/user-badge";
 import {
+  loadExpiredListings,
   loadResponseMinutes,
   loadSellerListings,
+  purgeExpiredListings,
+  renewListing,
   responseLabel,
+  type ExpiredListing,
   type Listing,
 } from "@/lib/listings";
 import { averageReviews, loadReviews, type Review, type ReviewAverages } from "@/lib/sales";
@@ -59,6 +63,10 @@ export function SellerShowcaseClient() {
   const [copied, setCopied] = useState(false);
   const [responseMinutes, setResponseMinutes] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [expired, setExpired] = useState<ExpiredListing[]>([]);
+  const [renewing, setRenewing] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!supabase || !sellerId) {
@@ -110,12 +118,39 @@ export function SellerShowcaseClient() {
 
       const minutes = await loadResponseMinutes(supabase, sellerId);
       if (!cancelled) setResponseMinutes(minutes);
+
+      // Kendi vitrininde: süresi dolmuş ilanları da göster (yenileme için)
+      if (user?.id === sellerId) {
+        await purgeExpiredListings(supabase);
+        const expiredRows = await loadExpiredListings(supabase, sellerId);
+        if (!cancelled) setExpired(expiredRows);
+      } else if (!cancelled) {
+        setExpired([]);
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [supabase, sellerId]);
+  }, [supabase, sellerId, user?.id, reloadKey]);
+
+  async function renewExpired(listingId: string) {
+    if (!supabase || renewing) return;
+    setRenewing(listingId);
+    setNotice(null);
+    const result = await renewListing(supabase, listingId);
+    setRenewing(null);
+    if (result && "error" in result && result.error) {
+      setNotice("İlan yenilenemedi, tekrar dene.");
+      return;
+    }
+    setReloadKey((key) => key + 1);
+  }
+
+  function hoursLeft(expiredAt: string) {
+    const ms = new Date(expiredAt).getTime() + 2 * 86400000 - Date.now();
+    return Math.max(0, Math.ceil(ms / 3600000));
+  }
 
   function showcaseUrl() {
     if (typeof window === "undefined") return "";
@@ -306,6 +341,39 @@ export function SellerShowcaseClient() {
                       {(value as number).toFixed(1)}
                       <span className="text-[0.58rem] font-normal text-muted-2"> /5</span>
                     </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {isMe && expired.length > 0 && (
+            <div className="card border-[#ffb3bb]/30 p-4">
+              <h2 className="text-sm font-bold">Süresi dolan ilanların ({expired.length})</h2>
+              <p className="mt-1 text-[0.68rem] leading-relaxed text-muted-2">
+                Yenilemezsen ilan kendiliğinden silinir. Satışı olan ilanlar silinmez.
+              </p>
+              {notice && <p className="mt-1 text-[0.68rem] text-[#ffb3bb]">{notice}</p>}
+              <div className="mt-2 space-y-2">
+                {expired.map((row) => (
+                  <div
+                    key={row.id}
+                    className="flex items-center gap-2 rounded-xl border border-line-soft bg-white/3 p-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[0.78rem] font-semibold">{row.title}</p>
+                      <p className="text-[0.62rem] text-[#ffb3bb]">
+                        {hoursLeft(row.expired_at)} saat içinde silinir
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void renewExpired(row.id)}
+                      disabled={renewing === row.id}
+                      className="shrink-0 rounded-lg border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-[0.68rem] font-semibold text-accent transition hover:bg-accent/20 disabled:opacity-60"
+                    >
+                      {renewing === row.id ? "…" : "Yenile"}
+                    </button>
                   </div>
                 ))}
               </div>
