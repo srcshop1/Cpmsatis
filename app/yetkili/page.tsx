@@ -46,7 +46,8 @@ type Tab =
   | "tags"
   | "roles"
   | "announce"
-  | "stats";
+  | "stats"
+  | "showcase";
 
 const STATUS_LABELS: Record<string, string> = {
   open: "Açık",
@@ -61,7 +62,7 @@ type TabGroup = {
   key: string;
   label: string;
   ownerOnly?: boolean;
-  tabs: { key: Tab; label: string }[];
+  tabs: { key: Tab; label: string; ownerOnly?: boolean }[];
 };
 
 /** Az sayıda ana kategori; her birinin içinde alt sekmeler var */
@@ -80,6 +81,7 @@ const TAB_GROUPS: TabGroup[] = [
     tabs: [
       { key: "listings", label: "Tüm ilanlar" },
       { key: "featured", label: "Öne çıkan" },
+      { key: "showcase", label: "Yetkili vitrini", ownerOnly: true },
     ],
   },
   {
@@ -232,6 +234,9 @@ export default function AdminPage() {
   const [banTarget, setBanTarget] = useState<MemberRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showcasePick, setShowcasePick] = useState<string[]>([]);
+  const [showcaseQuery, setShowcaseQuery] = useState("");
+  const [showcaseBusy, setShowcaseBusy] = useState(false);
 
   const [tagQuery, setTagQuery] = useState("");
   const [tagChoice, setTagChoice] = useState("vip");
@@ -357,7 +362,15 @@ export default function AdminPage() {
       );
     }
 
-    if (tab === "listings" || tab === "featured") {
+    if (tab === "showcase") {
+      const { data } = await supabase
+        .from("staff_showcase_current")
+        .select("listing_id, position")
+        .order("position", { ascending: true });
+      setShowcasePick(((data ?? []) as { listing_id: string }[]).map((row) => row.listing_id));
+    }
+
+    if (tab === "listings" || tab === "featured" || tab === "showcase") {
       let { data, error } = await supabase
         .from("listings")
         .select("id, title, price, status, featured_until, categories, seller_id, created_at")
@@ -765,6 +778,33 @@ export default function AdminPage() {
     setBusy(null);
     setNotice(approve ? "İlan öne çıkarıldı." : "Talep reddedildi.");
     await loadTab();
+  }
+
+  /** Bu haftanın yetkili vitrinini kaydeder (boş dizi = vitrin kapalı) */
+  async function saveShowcase(ids: string[]) {
+    if (!supabase) return;
+    setShowcaseBusy(true);
+    setNotice(null);
+
+    const { data, error } = await supabase.rpc("admin_set_showcase", { p_listing_ids: ids });
+
+    setShowcaseBusy(false);
+    if (error) {
+      console.error("[vitrin]", error.message);
+      setNotice(
+        /could not find the function|does not exist|schema cache/i.test(error.message)
+          ? "Vitrin tablosu yok. SQL güncellemesini (5af) çalıştır."
+          : error.message,
+      );
+      return;
+    }
+
+    setShowcasePick(ids);
+    setNotice(
+      Number(data ?? ids.length) > 0
+        ? "Vitrin kaydedildi. Bu hafta ana sayfada görünecek."
+        : "Bu hafta vitrin kapalı. Ana sayfada görünmeyecek.",
+    );
   }
 
   /** Bildiriyi yetkili notuyla kapatır ve bildirene sonuç bildirimi gönderir */
@@ -1243,7 +1283,10 @@ export default function AdminPage() {
     );
   }
 
-  const visibleGroups = TAB_GROUPS.filter((group) => !group.ownerOnly || role === "owner");
+  const canSee = (item: { ownerOnly?: boolean }) => !item.ownerOnly || role === "owner";
+  const visibleGroups = TAB_GROUPS.filter((group) => !group.ownerOnly || role === "owner")
+    .map((group) => ({ ...group, tabs: group.tabs.filter(canSee) }))
+    .filter((group) => group.tabs.length > 0);
   const activeGroup = visibleGroups.find((group) => group.tabs.some((item) => item.key === tab));
 
   return (
@@ -1457,6 +1500,145 @@ export default function AdminPage() {
               </div>
             ))}
           </>
+        )}
+
+        {tab === "showcase" && role === "owner" && (
+          <div className="card p-4">
+            <h2 className="text-sm font-bold">Yetkili Vitrini</h2>
+            <p className="mt-1 text-[0.7rem] leading-relaxed text-muted-2">
+              Her hafta en fazla 3 ilan seç. Seçim yapmazsan vitrin ana sayfada hiç görünmez.
+              Seçim sadece o hafta geçerli; hafta bitince yeniden seçmen gerekir.
+            </p>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {[0, 1, 2].map((slot) => {
+                const pickedId = showcasePick[slot];
+                const picked = listings.find((listing) => listing.id === pickedId);
+                return (
+                  <div
+                    key={slot}
+                    className={`rounded-xl border px-3 py-2 ${
+                      picked
+                        ? "border-accent/50 bg-accent/10"
+                        : "border-dashed border-line bg-white/2"
+                    }`}
+                  >
+                    <p className="text-[0.58rem] font-semibold uppercase tracking-wider text-muted-2">
+                      {slot + 1}. sıra
+                    </p>
+                    {picked ? (
+                      <div className="mt-1 flex items-start gap-1.5">
+                        <span className="min-w-0 flex-1 text-[0.72rem] font-semibold leading-snug">
+                          {picked.title}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowcasePick((prev) => prev.filter((id) => id !== pickedId))
+                          }
+                          className="shrink-0 text-muted-2 hover:text-danger"
+                          aria-label="Seçimi kaldır"
+                        >
+                          <XIcon width={12} height={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-[0.7rem] text-muted-2">boş</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <input
+              className="field mt-3"
+              value={showcaseQuery}
+              onChange={(event) => setShowcaseQuery(event.target.value)}
+              placeholder="ilan başlığı veya @satıcı ile ara"
+            />
+
+            <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
+              {(() => {
+                const needle = showcaseQuery.trim().toLocaleLowerCase("tr").replace("@", "");
+                const rows = listings
+                  .filter((listing) => listing.status === "active")
+                  .filter((listing) => {
+                    if (!needle) return true;
+                    return (
+                      listing.title.toLocaleLowerCase("tr").includes(needle) ||
+                      (profiles[listing.seller_id]?.username ?? "")
+                        .toLocaleLowerCase("tr")
+                        .includes(needle)
+                    );
+                  })
+                  .slice(0, 40);
+
+                if (rows.length === 0) {
+                  return (
+                    <p className="px-1 py-2 text-[0.72rem] text-muted-2">
+                      Uygun yayında ilan bulunamadı.
+                    </p>
+                  );
+                }
+
+                return rows.map((listing) => {
+                  const selected = showcasePick.includes(listing.id);
+                  const full = showcasePick.length >= 3 && !selected;
+                  return (
+                    <button
+                      key={listing.id}
+                      type="button"
+                      disabled={full}
+                      onClick={() =>
+                        setShowcasePick((prev) =>
+                          prev.includes(listing.id)
+                            ? prev.filter((id) => id !== listing.id)
+                            : prev.length >= 3
+                              ? prev
+                              : [...prev, listing.id],
+                        )
+                      }
+                      className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition disabled:opacity-40 ${
+                        selected
+                          ? "border-accent/60 bg-accent/15"
+                          : "border-line bg-white/4 hover:border-line-soft"
+                      }`}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[0.78rem] font-semibold">
+                          {listing.title}
+                        </span>
+                        <span className="block truncate text-[0.66rem] text-muted-2">
+                          @{profiles[listing.seller_id]?.username ?? "satıcı"} ·{" "}
+                          <Price value={listing.price} iconSize={11} />
+                        </span>
+                      </span>
+                      {selected && <CheckIcon width={14} height={14} className="shrink-0 text-accent" />}
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => void saveShowcase(showcasePick)}
+                disabled={showcaseBusy}
+                className="btn btn-primary h-10 flex-1 text-[0.78rem]"
+              >
+                {showcaseBusy ? <Spinner /> : `Vitrini kaydet (${showcasePick.length}/3)`}
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveShowcase([])}
+                disabled={showcaseBusy || showcasePick.length === 0}
+                className="btn h-10 border border-line bg-white/4 px-3 text-[0.78rem] text-muted"
+              >
+                Haftayı kapat
+              </button>
+            </div>
+          </div>
         )}
 
         {tab === "featured" && (

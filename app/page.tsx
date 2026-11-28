@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BottomNav } from "@/components/bottom-nav";
 import { CtaBand } from "@/components/home/cta-band";
 import { HomeShowcase } from "@/components/home/showcase";
+import { StaffShowcase } from "@/components/home/staff-showcase";
 import { SiteHeader } from "@/components/site-header";
 import {
   ArrowRightIcon,
@@ -136,6 +137,8 @@ export default function HomePage() {
               </div>
             </div>
           </section>
+
+          <StaffShowcase />
 
           <HomeShowcase />
 
