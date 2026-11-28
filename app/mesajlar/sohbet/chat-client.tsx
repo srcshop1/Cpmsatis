@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { ImageViewer } from "@/components/image-viewer";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/components/auth/auth-provider";
@@ -1164,6 +1165,56 @@ export function ChatClient() {
         onConfirm={clearChat}
         onCancel={() => setConfirmClear(false)}
       />
+      {copyMessage && (
+        <div className="fixed inset-0 z-[125] flex items-end justify-center sm:items-center">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setCopyMessage(null)}
+            aria-label="Kapat"
+          />
+          <div className="animate-pop relative w-full max-w-md rounded-t-2xl border border-line bg-surface p-4 sm:rounded-2xl">
+            <p className="text-[0.6rem] font-semibold uppercase tracking-wider text-muted-2">
+              Mesaj
+            </p>
+            <p className="mt-1.5 line-clamp-3 whitespace-pre-line break-words text-[0.8rem] leading-relaxed text-muted">
+              {copyMessage.body?.trim() || "Görsel"}
+            </p>
+
+            <div className="mt-3 grid gap-2">
+              <button
+                type="button"
+                onClick={() => void copyMessageText()}
+                className="btn btn-primary h-10 text-sm"
+              >
+                Kopyala
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyTo(copyMessage);
+                  setCopyMessage(null);
+                }}
+                className="btn h-10 border border-line bg-white/4 text-sm text-muted"
+              >
+                Alıntıla
+              </button>
+              <button
+                type="button"
+                onClick={() => setCopyMessage(null)}
+                className="btn h-10 border border-line bg-white/2 text-sm text-muted-2"
+              >
+                Vazgeç
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imageViewer && (
+        <ImageViewer src={imageViewer} onClose={() => setImageViewer(null)} />
+      )}
+
       {copyMessage && (
         <div className="fixed inset-0 z-[125] flex items-end justify-center sm:items-center">
           <button
