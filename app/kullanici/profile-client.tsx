@@ -495,6 +495,13 @@ export function UserProfileClient() {
           {reviews.map((review) => (
             <div key={review.id} className="rounded-xl border border-line-soft bg-white/3 p-3">
               <div className="flex items-center gap-2">
+                <FramedAvatar
+                  src={review.reviewer?.avatar_url}
+                  username={review.reviewer?.username}
+                  frame={review.reviewer?.equipped_frame}
+                  size={26}
+                  rounded="rounded-full"
+                />
                 <span className="text-[0.75rem] font-semibold">
                   @{review.reviewer?.username ?? "alıcı"}
                 </span>
