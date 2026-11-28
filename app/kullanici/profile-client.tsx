@@ -299,7 +299,7 @@ export function UserProfileClient() {
             rounded="rounded-2xl"
           />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-extrabold">@{profile.username}</p>
+            <p className="selectable truncate text-lg font-extrabold">@{profile.username}</p>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {profile.verified_seller && <VerifiedBadge small />}
               {sortTags(tags.filter((tag) => tag === "vip" || tag === "premium")).map((tag) => (
@@ -358,7 +358,7 @@ export function UserProfileClient() {
         </div>
 
         {profile.bio && (
-          <p className="mt-3 whitespace-pre-line text-[0.8rem] leading-relaxed text-muted">
+          <p className="selectable mt-3 whitespace-pre-line text-[0.8rem] leading-relaxed text-muted">
             {profile.bio}
           </p>
         )}

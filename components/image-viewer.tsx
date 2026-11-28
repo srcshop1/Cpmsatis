@@ -29,6 +29,7 @@ export function ImageViewer({
   const pinch = useRef<{ dist: number; scale: number } | null>(null);
   const panning = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
   const lastTap = useRef(0);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
 
   const clamp = (value: number) => Math.min(5, Math.max(1, value));
 
@@ -65,6 +66,8 @@ export function ImageViewer({
   };
 
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (scale === 1) swipe.current = { x: event.clientX, y: event.clientY };
+
     if (!zoomOn) {
       // Yakınlaştırma kapalıyken tek dokunuş: hızlı iki dokunuş = büyüt
       const now = Date.now();
@@ -112,6 +115,19 @@ export function ImageViewer({
   }
 
   function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    // Tek parmakla yatay kaydırma: önceki / sonraki fotoğraf
+    if (swipe.current && pointers.current.size <= 1 && scale === 1) {
+      const dx = event.clientX - swipe.current.x;
+      const dy = event.clientY - swipe.current.y;
+      swipe.current = null;
+      if (Math.abs(dx) > 55 && Math.abs(dy) < 70) {
+        if (dx < 0 && onNext) onNext();
+        if (dx > 0 && onPrev) onPrev();
+      }
+    } else {
+      swipe.current = null;
+    }
+
     pointers.current.delete(event.pointerId);
     if (pointers.current.size < 2) pinch.current = null;
     if (pointers.current.size === 0) panning.current = null;

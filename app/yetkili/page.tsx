@@ -1378,7 +1378,7 @@ export default function AdminPage() {
               <div key={ticket.id} className="card p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold">{ticket.title}</p>
+                    <p className="selectable text-sm font-semibold">{ticket.title}</p>
                     <p className="mt-0.5 text-[0.68rem] text-muted-2">
                       @{profiles[ticket.user_id]?.username ?? "kullanıcı"} ·{" "}
                       {new Date(ticket.created_at).toLocaleString("tr-TR")}
@@ -1388,11 +1388,11 @@ export default function AdminPage() {
                     {STATUS_LABELS[ticket.status] ?? ticket.status}
                   </span>
                 </div>
-                <p className="mt-2 whitespace-pre-wrap text-[0.78rem] leading-relaxed text-muted">
+                <p className="selectable mt-2 whitespace-pre-wrap text-[0.78rem] leading-relaxed text-muted">
                   {ticket.description}
                 </p>
                 {ticket.admin_note && (
-                  <p className="mt-2 whitespace-pre-wrap rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.72rem] leading-relaxed text-muted-2">
+                  <p className="selectable mt-2 whitespace-pre-wrap rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.72rem] leading-relaxed text-muted-2">
                     <span className="font-semibold text-text">Yetkili mesajı: </span>
                     {ticket.admin_note}
                   </p>
@@ -1458,7 +1458,7 @@ export default function AdminPage() {
                   </span>
                 </div>
                 {application.note && (
-                  <p className="mt-2 whitespace-pre-wrap rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.72rem] leading-relaxed text-muted-2">
+                  <p className="selectable mt-2 whitespace-pre-wrap rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.72rem] leading-relaxed text-muted-2">
                     <span className="font-semibold text-text">Yetkili notu: </span>
                     {application.note}
                   </p>
@@ -1837,7 +1837,7 @@ export default function AdminPage() {
                   </p>
                 )}
                 {report.admin_note && (
-                  <p className="mt-2 whitespace-pre-wrap rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.72rem] leading-relaxed text-muted-2">
+                  <p className="selectable mt-2 whitespace-pre-wrap rounded-lg border border-line-soft bg-white/4 px-3 py-2 text-[0.72rem] leading-relaxed text-muted-2">
                     <span className="font-semibold text-text">Yetkili mesajı: </span>
                     {report.admin_note}
                   </p>
