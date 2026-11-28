@@ -198,6 +198,7 @@ type MemberRow = {
   banned: boolean | null;
   banned_until?: string | null;
   ban_reason?: string | null;
+  banned_by?: string | null;
   created_at: string;
 };
 
@@ -233,6 +234,7 @@ export default function AdminPage() {
   const [frameMode, setFrameMode] = useState<"give" | "take">("give");
   const [confirmUser, setConfirmUser] = useState<MemberRow | null>(null);
   const [banTarget, setBanTarget] = useState<MemberRow | null>(null);
+  const [banAuthors, setBanAuthors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showcasePick, setShowcasePick] = useState<string[]>([]);
@@ -400,7 +402,7 @@ export default function AdminPage() {
       let { data, error } = await supabase
         .from("profiles")
         .select(
-          "id, username, email, sales_count, verified_seller, staff_tag, banned, banned_until, ban_reason, created_at",
+          "id, username, email, sales_count, verified_seller, staff_tag, banned, banned_until, ban_reason, banned_by, created_at",
         )
         .order("created_at", { ascending: false })
         .limit(80);
@@ -423,7 +425,23 @@ export default function AdminPage() {
         data = basic.data as typeof data;
       }
 
-      setMembers((data ?? []) as unknown as MemberRow[]);
+      const rows = (data ?? []) as unknown as MemberRow[];
+      setMembers(rows);
+
+      // Askıya alan yetkililerin adları
+      const authorIds = Array.from(
+        new Set(rows.map((row) => row.banned_by).filter((id): id is string => Boolean(id))),
+      );
+      if (authorIds.length > 0) {
+        const authors = await supabase.from("profiles").select("id, username").in("id", authorIds);
+        const map: Record<string, string> = {};
+        for (const row of (authors.data ?? []) as { id: string; username: string }[]) {
+          map[row.id] = row.username;
+        }
+        setBanAuthors(map);
+      } else {
+        setBanAuthors({});
+      }
     }
 
     if (tab === "sales") {
@@ -2102,6 +2120,18 @@ export default function AdminPage() {
                         {member.email ?? "e-posta yok"} · {member.sales_count ?? 0} işlem ·{" "}
                         {new Date(member.created_at).toLocaleDateString("tr-TR")}
                       </p>
+                      {member.banned && (
+                        <p className="mt-1 text-[0.66rem] leading-relaxed text-[#ffb3bb]">
+                          {member.banned_until
+                            ? `${new Date(member.banned_until).toLocaleDateString("tr-TR")} tarihine kadar`
+                            : "Süresiz"}{" "}
+                          askıda
+                          {member.ban_reason ? ` · ${member.ban_reason}` : ""}
+                          {member.banned_by
+                            ? ` · askıya alan: @${banAuthors[member.banned_by] ?? "yetkili"}`
+                            : ""}
+                        </p>
+                      )}
                     </div>
                     <Link
                       href={`/ilanlar?q=${encodeURIComponent(member.username)}`}

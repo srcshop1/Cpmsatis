@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let { data, error } = await supabase
         .from("profiles")
         .select(
-          "username, avatar_url, rating, sales_count, review_count, verified_seller, equipped_frame, staff_tag, banned, banned_until, ban_reason",
+          "username, avatar_url, rating, sales_count, review_count, verified_seller, equipped_frame, staff_tag, banned, banned_until, ban_reason, banned_by, updated_at",
         )
         .eq("id", authUser.id)
         .maybeSingle();
@@ -101,6 +101,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("id", authUser.id)
         .then(() => undefined);
 
+      const extra = data as {
+        banned?: boolean | null;
+        banned_until?: string | null;
+        ban_reason?: string | null;
+        banned_by?: string | null;
+        updated_at?: string | null;
+      };
+
+      // Askıya alan yetkilinin adı
+      let banAuthorUsername: string | null = null;
+      if (extra.banned_by) {
+        const author = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", extra.banned_by)
+          .maybeSingle();
+        banAuthorUsername = (author.data?.username as string | undefined) ?? null;
+      }
+
       return {
         id: authUser.id,
         username: data.username ?? fallback.username,
@@ -112,9 +131,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verifiedSeller: data.verified_seller,
         frame: data.equipped_frame,
         staffTag: data.staff_tag,
-        banned: (data as { banned?: boolean | null }).banned ?? null,
-        bannedUntil: (data as { banned_until?: string | null }).banned_until ?? null,
-        banReason: (data as { ban_reason?: string | null }).ban_reason ?? null,
+        banned: extra.banned ?? null,
+        bannedUntil: extra.banned_until ?? null,
+        banReason: extra.ban_reason ?? null,
+        bannedBy: extra.banned_by ?? null,
+        banAuthorUsername,
+        bannedAt: extra.banned ? (extra.updated_at ?? null) : null,
         createdAt: authUser.created_at,
       };
     },
