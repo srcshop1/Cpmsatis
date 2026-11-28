@@ -2815,3 +2815,51 @@ grant execute on function public.admin_set_showcase(uuid[]) to authenticated;
 
 -- 60 günden eski seçimleri temizle
 delete from public.staff_showcase where week_start < (now()::date - 60);
+
+
+-- ---------- 5ag) GOOGLE İLE KAYIT ----------
+-- Google'dan gelen isim ve fotoğraf profile yazılır.
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_base text;
+  v_username text;
+  v_avatar text;
+begin
+  v_base := coalesce(
+    nullif(new.raw_user_meta_data ->> 'username', ''),
+    nullif(new.raw_user_meta_data ->> 'display_name', ''),
+    nullif(new.raw_user_meta_data ->> 'full_name', ''),
+    nullif(new.raw_user_meta_data ->> 'name', ''),
+    split_part(coalesce(new.email, 'oyuncu'), '@', 1)
+  );
+
+  v_username := lower(v_base);
+  v_username := regexp_replace(v_username, '\s+', '_', 'g');
+  v_username := regexp_replace(v_username, '[^a-z0-9_.]', '', 'g');
+
+  if length(v_username) < 3 then
+    v_username := v_username || '_' || substr(new.id::text, 1, 4);
+  end if;
+
+  v_avatar := coalesce(
+    nullif(new.raw_user_meta_data ->> 'avatar_url', ''),
+    nullif(new.raw_user_meta_data ->> 'picture', '')
+  );
+
+  begin
+    insert into public.profiles (id, username, email, avatar_url)
+    values (new.id, v_username, new.email, v_avatar)
+    on conflict (id) do nothing;
+  exception when unique_violation then
+    insert into public.profiles (id, username, email, avatar_url)
+    values (new.id, left(v_username, 18) || '_' || substr(new.id::text, 1, 6), new.email, v_avatar)
+    on conflict (id) do nothing;
+  end;
+
+  return new;
+end; $$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users
+for each row execute function public.handle_new_user();

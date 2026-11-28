@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { LockIcon, UserIcon } from "@/components/icons";
 import { Spinner } from "@/components/ui/spinner";
 import { validateLogin } from "@/lib/validation";
+import { GoogleButton } from "./google-button";
 import { TextField } from "./text-field";
 
 export function LoginForm({ nextPath }: { nextPath?: string }) {
@@ -61,6 +62,17 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
   }
 
   return (
+    <div className="space-y-4">
+      <GoogleButton label="Google ile Giriş Yap" nextPath={nextPath} />
+
+      <div className="flex items-center gap-3">
+        <span className="h-px flex-1 bg-line" />
+        <span className="text-[0.68rem] font-semibold uppercase tracking-wider text-muted-2">
+          veya
+        </span>
+        <span className="h-px flex-1 bg-line" />
+      </div>
+
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
       {serverError && (
         <div
@@ -129,5 +141,6 @@ export function LoginForm({ nextPath }: { nextPath?: string }) {
         </Link>
       </p>
     </form>
+    </div>
   );
 }
