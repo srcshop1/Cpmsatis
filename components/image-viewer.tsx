@@ -5,8 +5,9 @@ import { ChevronLeftIcon, PlusIcon, XIcon } from "@/components/icons";
 
 /**
  * Tam ekran görsel görüntüleyici.
- * Sağ üstteki minik buton yakınlaştırmayı açar/kapatır; açıkken iki parmakla
- * büyütme, sürükleyerek gezinme, tekerlek ve +/- çalışır.
+ * Sağ üstteki buton yakınlaştırmayı açar/kapatır. Açıkken iki parmakla
+ * tuttuğun nokta sabit kalarak büyür, iki parmakla her yöne kaydırılır,
+ * tek parmakla gezinilir, tekerlek ve +/- de çalışır.
  */
 export function ImageViewer({
   src,
@@ -25,8 +26,16 @@ export function ImageViewer({
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
+  const stageRef = useRef<HTMLDivElement>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
-  const pinch = useRef<{ dist: number; scale: number } | null>(null);
+  const gesture = useRef<{
+    s0: number;
+    tx0: number;
+    ty0: number;
+    dist0: number;
+    mid0: { x: number; y: number };
+    focal: { x: number; y: number };
+  } | null>(null);
   const panning = useRef<{ x: number; y: number; startX: number; startY: number } | null>(null);
   const lastTap = useRef(0);
   const swipe = useRef<{ x: number; y: number } | null>(null);
@@ -59,17 +68,36 @@ export function ImageViewer({
     if (!zoomOn) reset();
   }, [zoomOn, reset]);
 
-  const distance = () => {
-    const [a, b] = Array.from(pointers.current.values());
+  function points() {
+    return Array.from(pointers.current.values());
+  }
+
+  function distance() {
+    const [a, b] = points();
     if (!a || !b) return 0;
     return Math.hypot(a.x - b.x, a.y - b.y);
-  };
+  }
+
+  function middle() {
+    const [a, b] = points();
+    if (!a || !b) return { x: 0, y: 0 };
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
+  /** Ekran noktasını sahne merkezine göre koordinata çevirir */
+  function focalPoint(point: { x: number; y: number }) {
+    const rect = stageRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    return {
+      x: point.x - (rect.left + rect.width / 2),
+      y: point.y - (rect.top + rect.height / 2),
+    };
+  }
 
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (scale === 1) swipe.current = { x: event.clientX, y: event.clientY };
 
     if (!zoomOn) {
-      // Yakınlaştırma kapalıyken tek dokunuş: hızlı iki dokunuş = büyüt
       const now = Date.now();
       if (now - lastTap.current < 320) {
         setScale((prev) => (prev > 1 ? 1 : 2.4));
@@ -80,11 +108,20 @@ export function ImageViewer({
       lastTap.current = now;
       return;
     }
+
     event.currentTarget.setPointerCapture(event.pointerId);
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     if (pointers.current.size === 2) {
-      pinch.current = { dist: distance(), scale };
+      const mid = middle();
+      gesture.current = {
+        s0: scale,
+        tx0: offset.x,
+        ty0: offset.y,
+        dist0: distance(),
+        mid0: mid,
+        focal: focalPoint(mid),
+      };
       panning.current = null;
     } else if (pointers.current.size === 1) {
       panning.current = {
@@ -100,13 +137,26 @@ export function ImageViewer({
     if (!zoomOn || !pointers.current.has(event.pointerId)) return;
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
-    if (pointers.current.size >= 2 && pinch.current) {
-      const next = clamp((pinch.current.scale * distance()) / (pinch.current.dist || 1));
-      setScale(next);
-      if (next === 1) setOffset({ x: 0, y: 0 });
+    // İki parmak: tutulan nokta sabit kalacak şekilde büyüt + birlikte kaydır
+    if (pointers.current.size >= 2 && gesture.current) {
+      const g = gesture.current;
+      const nextScale = clamp((g.s0 * distance()) / (g.dist0 || 1));
+      const ratio = nextScale / g.s0;
+      const mid = middle();
+
+      setScale(nextScale);
+      if (nextScale <= 1.001) {
+        setOffset({ x: 0, y: 0 });
+        return;
+      }
+      setOffset({
+        x: g.focal.x - (g.focal.x - g.tx0) * ratio + (mid.x - g.mid0.x),
+        y: g.focal.y - (g.focal.y - g.ty0) * ratio + (mid.y - g.mid0.y),
+      });
       return;
     }
 
+    // Tek parmak: gezinme
     if (panning.current && scale > 1) {
       const dx = event.clientX - panning.current.x;
       const dy = event.clientY - panning.current.y;
@@ -115,7 +165,7 @@ export function ImageViewer({
   }
 
   function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
-    // Tek parmakla yatay kaydırma: önceki / sonraki fotoğraf
+    // Tek parmak yatay kaydırma: önceki / sonraki fotoğraf
     if (swipe.current && pointers.current.size <= 1 && scale === 1) {
       const dx = event.clientX - swipe.current.x;
       const dy = event.clientY - swipe.current.y;
@@ -129,15 +179,23 @@ export function ImageViewer({
     }
 
     pointers.current.delete(event.pointerId);
-    if (pointers.current.size < 2) pinch.current = null;
+    if (pointers.current.size < 2) gesture.current = null;
     if (pointers.current.size === 0) panning.current = null;
   }
 
-  function stepZoom(delta: number) {
-    setScale((prev) => {
-      const next = clamp(prev + delta);
-      if (next === 1) setOffset({ x: 0, y: 0 });
-      return next;
+  function stepZoom(delta: number, at?: { x: number; y: number }) {
+    const focal = at ? focalPoint(at) : { x: 0, y: 0 };
+    const next = clamp(scale + delta);
+    if (next <= 1.001) {
+      setScale(1);
+      setOffset({ x: 0, y: 0 });
+      return;
+    }
+    const ratio = next / scale;
+    setScale(next);
+    setOffset({
+      x: focal.x - (focal.x - offset.x) * ratio,
+      y: focal.y - (focal.y - offset.y) * ratio,
     });
   }
 
@@ -170,6 +228,7 @@ export function ImageViewer({
       </div>
 
       <div
+        ref={stageRef}
         className="relative flex flex-1 items-center justify-center overflow-hidden"
         style={{ touchAction: zoomOn ? "none" : "pan-y" }}
         onPointerDown={onPointerDown}
@@ -179,7 +238,7 @@ export function ImageViewer({
         onWheel={(event) => {
           if (!zoomOn) return;
           event.preventDefault();
-          stepZoom(event.deltaY < 0 ? 0.35 : -0.35);
+          stepZoom(event.deltaY < 0 ? 0.35 : -0.35, { x: event.clientX, y: event.clientY });
         }}
         onDoubleClick={() => {
           setScale((prev) => (prev > 1 ? 1 : 2.4));
@@ -194,7 +253,7 @@ export function ImageViewer({
           className="max-h-full max-w-full object-contain select-none"
           style={{
             transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-            transition: panning.current ? "none" : "transform 0.15s ease-out",
+            transition: panning.current || gesture.current ? "none" : "transform 0.15s ease-out",
             cursor: zoomOn ? (scale > 1 ? "grab" : "zoom-in") : "default",
           }}
         />

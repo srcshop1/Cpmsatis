@@ -14,14 +14,7 @@ import { NOTIFICATION_EVENT } from "@/lib/social";
 export function SiteHeader() {
   const { user, loading } = useAuth();
   const [unread, setUnread] = useState(0);
-  const [raised, setRaised] = useState(false);
 
-  useEffect(() => {
-    const onScroll = () => setRaised(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
   useEffect(() => {
@@ -61,11 +54,7 @@ export function SiteHeader() {
 
   return (
     <>
-    <header
-      className={`sticky top-0 z-40 border-b border-line-soft/80 bg-ink/85 backdrop-blur-xl transition-all duration-300 ${
-        raised ? "header-raised" : ""
-      }`}
-    >
+    <header className="sticky top-0 z-40 border-b border-line-soft/80 bg-ink/85 backdrop-blur-xl">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-2 px-3 sm:gap-3 sm:px-4">
         <Logo />
 
@@ -125,7 +114,7 @@ export function SiteHeader() {
               >
                 <BellIcon width={17} height={17} />
                 {unread > 0 && (
-                  <span className="badge-pulse absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.55rem] font-bold text-ink">
+                  <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.55rem] font-bold text-ink">
                     {unread > 9 ? "9+" : unread}
                   </span>
                 )}
