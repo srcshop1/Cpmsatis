@@ -841,6 +841,50 @@ begin
 end; $$;
 grant execute on function public.admin_set_frame(uuid, text, boolean) to authenticated;
 
+-- ---------- 5ad) ÇERÇEVE / ROZET KISITLARINI GENİŞLET ----------
+-- Eski kısıtlar yalnızca 6 tag çerçevesine ve 3 rozete izin veriyordu;
+-- başarı çerçeveleri ve "Güvenilir / Hızlı Teslimat / Destekçi" rozetleri hata veriyordu.
+do $$
+declare c record;
+begin
+  for c in
+    select conname from pg_constraint
+     where conrelid = 'public.user_frames'::regclass
+       and contype = 'c'
+       and pg_get_constraintdef(oid) ilike '%frame%'
+  loop
+    execute format('alter table public.user_frames drop constraint %I', c.conname);
+  end loop;
+end $$;
+
+alter table public.user_frames
+  add constraint user_frames_frame_check check (frame in (
+    'member','verified_seller','vip','premium','moderator','owner',
+    'ach_first_sale','ach_member_1y','ach_sales_10','ach_rating_40','ach_listings_10',
+    'ach_fast_20','ach_sales_25','ach_rating_45','ach_sales_50','ach_views_1000',
+    'ach_fast_5','ach_favorites_100','ach_rating_48','ach_rating_50','ach_sales_100',
+    'ach_rating_100'
+  ));
+
+do $$
+declare c record;
+begin
+  for c in
+    select conname from pg_constraint
+     where conrelid = 'public.user_tags'::regclass
+       and contype = 'c'
+       and pg_get_constraintdef(oid) ilike '%tag%'
+  loop
+    execute format('alter table public.user_tags drop constraint %I', c.conname);
+  end loop;
+end $$;
+
+alter table public.user_tags
+  add constraint user_tags_tag_check check (tag in (
+    'vip','premium','verified_seller','trusted','fast','support'
+  ));
+
+
 
 
 
