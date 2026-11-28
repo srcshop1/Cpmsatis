@@ -97,11 +97,11 @@ export const frames: Frame[] = [
     slug: "ach_member_1y",
     name: "Kıdemli",
     category: "achievement",
-    theme: "bronze",
+    theme: "emerald",
     needs: "achievement",
     rank: 2,
-    hint: "1 yıllık üye ol",
-    rule: { kind: "member_days", min: 365 },
+    hint: "30 günlük üye ol",
+    rule: { kind: "member_days", min: 30 },
   },
   {
     slug: "ach_sales_10",
@@ -120,18 +120,8 @@ export const frames: Frame[] = [
     theme: "silver",
     needs: "achievement",
     rank: 3,
-    hint: "10 değerlendirmede 4.0 ortalama tuttur",
+    hint: "10 değerlendirmede ortalama en az 4.0",
     rule: { kind: "rating", min: 4.0, reviews: 10 },
-  },
-  {
-    slug: "ach_listings_10",
-    name: "Vitrin",
-    category: "achievement",
-    theme: "sunset",
-    needs: "achievement",
-    rank: 4,
-    hint: "Aynı anda 10 ilanın yayında olsun",
-    rule: { kind: "listings", min: 10 },
   },
   {
     slug: "ach_fast_20",
@@ -160,7 +150,7 @@ export const frames: Frame[] = [
     theme: "gold-soft",
     needs: "achievement",
     rank: 7,
-    hint: "30 değerlendirmede 4.5 ortalama tuttur",
+    hint: "30 değerlendirmede ortalama en az 4.5",
     rule: { kind: "rating", min: 4.5, reviews: 30 },
   },
   {
@@ -210,7 +200,7 @@ export const frames: Frame[] = [
     theme: "magenta",
     needs: "achievement",
     rank: 10,
-    hint: "60 değerlendirmede 4.8 ortalama tuttur",
+    hint: "60 değerlendirmede ortalama en az 4.8",
     rule: { kind: "rating", min: 4.8, reviews: 60 },
   },
   {
@@ -220,7 +210,7 @@ export const frames: Frame[] = [
     theme: "royal",
     needs: "achievement",
     rank: 11,
-    hint: "20 değerlendirmede 5.0 ortalama tuttur",
+    hint: "20 değerlendirmede ortalama en az 4.95",
     rule: { kind: "rating", min: 4.95, reviews: 20 },
   },
   {
@@ -240,7 +230,7 @@ export const frames: Frame[] = [
     theme: "royal",
     needs: "achievement",
     rank: 12,
-    hint: "100 değerlendirmede 4.5 ortalama tuttur",
+    hint: "100 değerlendirmede ortalama en az 4.5",
     rule: { kind: "rating", min: 4.5, reviews: 100 },
   },
 ];
@@ -314,7 +304,7 @@ export function frameProgress(frame: Frame, stats: FrameStats): string | null {
     case "rating":
       return stats.reviews < rule.reviews
         ? `${stats.reviews} / ${rule.reviews} değerlendirme`
-        : `puan ${stats.rating.toFixed(1)} / ${rule.min}`;
+        : `ortalama ${stats.rating.toFixed(1)} · en az ${rule.min}`;
     case "sales":
       return `${Math.min(stats.sales, rule.min)} / ${rule.min} işlem`;
     case "response":

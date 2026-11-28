@@ -708,7 +708,7 @@ begin
 
   return case p_frame
     when 'ach_first_sale' then v_sales >= 1
-    when 'ach_member_1y' then v_days >= 365
+    when 'ach_member_1y' then v_days >= 30
     when 'ach_sales_10' then v_sales >= 10
     when 'ach_reviews_10' then v_reviews >= 10
     when 'ach_listings_10' then v_listings >= 10
@@ -788,7 +788,7 @@ begin
 
   return case p_frame
     when 'ach_first_sale' then v_sales >= 1
-    when 'ach_member_1y' then v_days >= 365
+    when 'ach_member_1y' then v_days >= 30
     when 'ach_sales_10' then v_sales >= 10
     when 'ach_rating_40' then v_reviews >= 10 and v_rating >= 4.0
     when 'ach_listings_10' then v_listings >= 10
